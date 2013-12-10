@@ -8,17 +8,26 @@ cmake_minimum_required(VERSION 2.6.4)
 # options
 
 option(WITH_TESTS "Build tests."  OFF)
-option(WITH_DOCS  "Generate docs" OFF)
+option(WITH_DOCS  "Generate docs." OFF)
+option(WITH_SHARED_LIBS "Build shared libraries." OFF)
+option(WITH_STATIC_LIBS "Build static libraries." ON)
+option(CSIO_FORCE_SHARED_CRT
+	"Use shared run-time lib even when csio is built as static lib." OFF)
 
 ########################################################################
 # general
 
 project(csio)
 
+include("${PROJECT_SOURCE_DIR}/cmake/ext/nx_utils.cmake")
+nx_configure()
+
+
 set(csio_VERSION_MAJOR 0)
 set(csio_VERSION_MINOR 0)
-set(csio_VERSION_PATCH 0)
+set(csio_VERSION_PATCH 1)
 # configuration header
+set(TEST_SAMPLES_DIR "${PROJECT_SOURCE_DIR}/test/samples/")
 configure_file(
 	"${PROJECT_SOURCE_DIR}/src/csio_config.cfg"
 	"${PROJECT_SOURCE_DIR}/src/csio_config.h"
@@ -28,7 +37,26 @@ configure_file(
 set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}"
                       "${PROJECT_SOURCE_DIR}/cmake/Modules")
 
-include_directories("${PROJECT_SOURCE_DIR}/src")
+include_directories("${PROJECT_SOURCE_DIR}/src"
+                    "${PROJECT_SOURCE_DIR}/include")
+
+###########################################################################
+# zlib
+
+find_package(ZLIB REQUIRED)
+include_directories(${ZLIB_INCLUDE_DIRS})
+list(APPEND LIBRARIES ${ZLIB_LIBRARIES})
+
+########################################################################
+# csio
+
+set(CSIO_SRC include/csio.h
+             src/csio.c)
+nx_add_library(csio ${CSIO_FORCE_SHARED_CRT} ${WITH_STATIC_LIBS} 
+	${WITH_SHARED_LIBS} "CSIO_SHARED"
+	"${csio_VERSION_MAJOR}-${csio_VERSION_MINOR}-${csio_VERSION_PATCH}"
+	"${CSIO_SRC}")
+list(APPEND LIBRARIES csio)
 
 ########################################################################
 # docs
@@ -50,35 +78,18 @@ endif()
 ########################################################################
 # tests
 
-function(nx_GTEST_ADD_TESTS executable extra_args)
-	foreach(source ${ARGN})
-		file(READ "${source}" contents)
-		string(REGEX MATCHALL "TEST_?F?\\(([A-Za-z_0-9 ,]+)\\)"
-			found_tests ${contents})
-		foreach(hit ${found_tests})
-			string(REGEX REPLACE ".*\\( *([A-Za-z_0-9]+),"
-			                     " *([A-Za-z_0-9]+) *\\).*"
-			                     "\\1.\\2"
-			                     test_name ${hit})
-			add_test("${executable}-${test_name}"
-				${executable}
-				--gtest_filter=${test_name}
-				${extra_args})
-		endforeach()
-	endforeach()
-endfunction()
-
 if(WITH_TESTS)
 	set(SOURCES_TEST
-		./test/test.cpp)
+		./test/test.cpp
+		./test/tcsio_none.hpp
+		./test/tcsio_dictzip.hpp)
 	enable_testing()
 	find_package(GTest REQUIRED)
 	include_directories(${GTEST_INCLUDE_DIRS})
 	set(TEST test_${PROJECT_NAME})
 	add_executable(${TEST} ${SOURCES_TEST})
 	if(NOT WIN32)
-		SET_TARGET_PROPERTIES(${TEST} 
-			PROPERTIES LINK_FLAGS -pthread)
+		list(APPEND LIBRARIES pthread)
 	endif(NOT WIN32)
 	target_link_libraries("${TEST}" ${GTEST_LIBRARIES} ${LIBRARIES})
 	nx_GTEST_ADD_TESTS("${TEST}" ${SOURCES_TEST})

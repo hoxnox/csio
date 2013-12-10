@@ -5,6 +5,8 @@
 
 // Google Testing Framework
 #include <gtest/gtest.h>
+#include "tcsio_none.hpp"
+#include "tcsio_dictzip.hpp"
 
 // test cases
 
