@@ -1,5 +1,5 @@
 /**@author Merder Kim <hoxnox@gmail.com>
- * @date $date$
+ * @date 20131217 15:33:12
  *
  * Stdlib based compressed stream I/O library. It gives you ability
  * transparently work with compressed streams as if they are not.*/
@@ -39,6 +39,7 @@ typedef struct {
 	char*             idx;
 	z_stream          zst;
 	int               init_magic;
+	int               eof;
 } CFILE;
 
 
@@ -58,4 +59,4 @@ CSIO_API int    cfgetc(CFILE* stream);
 }
 #endif
 
-#endif // __CSIO_H__
+#endif

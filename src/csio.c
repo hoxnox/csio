@@ -31,7 +31,7 @@ cfopen(const char* name, const char* mode)
 	return rs;
 }
 
-inline size_t skip_cstr(FILE* strm)
+size_t skip_cstr(FILE* strm)
 {
 	size_t result = 0;
 	if (strm)
@@ -51,7 +51,7 @@ get_compression(FILE* stream)
 	char buf[3];
 	if (fread((void*)buf, 1, 3, stream) != 3)
 		result = NONE;
-	else if (memcmp(buf, GZIP_DEFLATE_ID, 3) == 0) // gzip magic
+	else if (memcmp(buf, GZIP_DEFLATE_ID, 3) == 0)
 		result = GZIP;
 	fseeko(stream, currpos, SEEK_SET);
 	return result;
@@ -67,10 +67,10 @@ typedef struct
 	uint32_t mtime;
 	uint8_t  xfl;
 	uint8_t  os;
-	uint16_t chcnt;          // from RA extension
-	uint16_t chunks[0xffff]; // from RA extension
-	uint16_t chlen;          // from RA extension
-	off_t    dataoff;        // Data offset
+	uint16_t chcnt;
+	uint16_t chunks[0xffff];
+	uint16_t chlen;
+	off_t    dataoff;
 	uint16_t fnamelen;
 	uint16_t commentlen;
 	uint32_t isize;
@@ -89,11 +89,10 @@ int
 get_gzip_header(FILE* stream, GZIPHeader* hdr)
 {
 	const char HDRSZ = 10;
-	char buf[HDRSZ];
 	int rs = fread((void *)hdr, 1, HDRSZ, stream);
 	if (rs != HDRSZ)
 		return -1;
-	if (memcmp(hdr, GZIP_DEFLATE_ID, 3) != 0) // gzip magic
+	if (memcmp(hdr, GZIP_DEFLATE_ID, 3) != 0)
 		return 0;
 
 	/*if (hdr->flg & FRESERVED)
@@ -103,10 +102,12 @@ get_gzip_header(FILE* stream, GZIPHeader* hdr)
 		uint16_t xlen;
 		if (fread((void*)&xlen, 1, 2, stream) != 2)
 			return -1;
-		//	Each subfield:
-		//	+---+---+---+---+===============================+
-		//	|SUB_ID |  LEN  | LEN bytes of subfield data ...|
-		//	+---+---+---+---+===============================+
+		/*
+		Each subfield:
+		+---+---+---+---+===============================+
+		|SUB_ID |  LEN  | LEN bytes of subfield data ...|
+		+---+---+---+---+===============================+
+		*/
 		long pos = ftell(stream);
 		if (pos == -1)
 			return -1;
@@ -121,7 +122,6 @@ get_gzip_header(FILE* stream, GZIPHeader* hdr)
 			uint16_t subdataln;
 			if ((rs = fread((void*)&subdataln, 1, 2, stream)) != 2)
 				return -1;
-			// The only subfield we know how to process is RA
 			if (sub_id[0] == 'R' && sub_id[1] == 'A')
 			{
 				if (subdataln < 6)
@@ -137,7 +137,7 @@ get_gzip_header(FILE* stream, GZIPHeader* hdr)
 				if (*(uint16_t*)&xhdr[4]*2 > subdataln-2*3)
 					{ errno = EFAULT; return -1; }
 				hdr->chcnt = *(uint16_t*)&xhdr[4];
-				if (fread((void*)hdr->chunks, 2, 
+				if (fread((void*)hdr->chunks, 2,
 				          hdr->chcnt, stream) != hdr->chcnt)
 				{
 					hdr->chcnt = 0;
@@ -159,7 +159,7 @@ get_gzip_header(FILE* stream, GZIPHeader* hdr)
 		fseek(stream, 2, SEEK_CUR);
 	if (hdr->chcnt == 0)
 	{
-		// TODO: skipping to the member implemented  only for dictzip
+		/* TODO: skipping to the member implemented  only for dictzip*/
 		errno = ENOSYS;
 		return -1;
 	}
@@ -217,6 +217,8 @@ clear(CFILE* cstream)
 	cstream->idxsz = 0;
 	cstream->idx = NULL;
 	cstream->init_magic = 0;
+	cstream->eof = 0;
+	return 0;
 }
 
 /**@brief Creates dictzip index
@@ -357,16 +359,17 @@ fill_buf(CFILE* cstream, off_t pos)
 	if (pos >= cstream->size)
 	{
 		errno = EINVAL;
+		cstream->eof = 1;
 		return -1;
 	}
 	if (cstream->compression != DICTZIP)
 	{
-		errno = ENOSYS; // not implemented
+		errno = ENOSYS;
 		return -1;
 	}
 	if (pos >= cstream->bufoff)
 		if(pos - cstream->bufoff < cstream->bufsz)
-			return 1; // already in buffer
+			return 1;
 	size_t chunk_no = pos/cstream->chlen;
 	if (chunk_no > (cstream->idxsz/8 - 1))
 	{
@@ -429,7 +432,7 @@ fill_buf(CFILE* cstream, off_t pos)
 	return 1;
 }
 
-/**@brief Init CFILE* from stdio FILE* 
+/**@brief Init CFILE* from stdio FILE*
  *
  * Scan file and make index*/
 CFILE*
@@ -447,18 +450,20 @@ cfinit(FILE* stream)
 	switch(cstream->compression)
 	{
 		case GZIP:
-			// first try to build dictzip index, on failure
-			// fall down to gzip
+			/* first try to build dictzip index, on failure
+			   fall down to gzip*/
 			if (init_dictzip(stream, cstream) != 1)
 			{
-				// standard GZIP is not implemented yet
+				/* standard GZIP is not implemented yet*/
 				free(cstream);
 				cstream = NULL;
-				errno = ENOSYS; 
+				errno = ENOSYS;
 			}
 			break;
 		case NONE:
 			cstream->stream = stream;
+			break;
+		default:
 			break;
 	}
 	if (cstream != NULL)
@@ -493,15 +498,10 @@ cfeof(CFILE* cstream)
 	if (cferror(cstream))
 		return 1;
 	if (cstream->compression == NONE)
-	{
 		return feof(cstream->stream);
-	}
-	else if (cstream->compression = DICTZIP)
-	{
-		if (cstream->currpos >= cstream->size)
-			return 1;
-		return 0;
-	}
+	else if (cstream->compression == DICTZIP)
+		return cstream->eof;
+	return 1;
 }
 
 /**@brief Move logical position
@@ -521,14 +521,17 @@ cfseeko(CFILE* stream, off_t offset, int mode)
 		return -1;
 	if (stream->compression == DICTZIP)
 	{
+		stream->eof = 0;
 		switch (mode)
 		{
 			case SEEK_SET: stream->currpos = offset; break;
 			case SEEK_CUR: stream->currpos += offset; break;
-			case SEEK_END: stream->currpos = 
+			case SEEK_END: stream->currpos =
 			               stream->size + offset < stream->size ?
 			                   stream->size + offset : stream->size;
 		}
+		if(stream->currpos >= stream->size)
+			stream->eof = 1;
 	}
 	else if (stream->compression == NONE)
 	{
@@ -539,6 +542,7 @@ cfseeko(CFILE* stream, off_t offset, int mode)
 		errno = ENOSYS;
 		return -1;
 	}
+	return 0;
 }
 
 /**@brief Tell current logical position*/
@@ -628,13 +632,17 @@ cfgetc(CFILE* stream)
 	}
 	else if (stream->compression == DICTZIP)
 	{
+		if (stream->currpos == stream->size)
+		{
+			stream->eof = 1;
+			return EOF;
+		}
 		if (fill_buf(stream, stream->currpos) != 1)
 		{
 			errno = EFAULT;
 			return EOF;
 		}
-		++stream->currpos;
-		return stream->buf[stream->currpos - stream->bufoff];
+		return stream->buf[stream->currpos++ - stream->bufoff];
 	}
 	else
 	{

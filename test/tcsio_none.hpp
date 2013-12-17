@@ -1,5 +1,5 @@
-/**@author $username$ <$usermail$>
- * @date $date$ */
+/**@author hoxnox <hoxnox@gmail.com>
+ * @date 20131217 15:33:12 */
 
 #ifndef __TCSIO_NONE_HPP__
 #define __TCSIO_NONE_HPP__
@@ -62,7 +62,10 @@ TEST_F(TestCSIONone, cfread )
 TEST_F(TestCSIONone, cfgetc )
 {
 	for(size_t i = 0; i < 256; ++i)
+	{
 		ASSERT_EQ(cfgetc(csample), 0) << i;
+		ASSERT_EQ(cfeof(csample) , 0);
+	}
 	ASSERT_EQ(cfgetc(csample), EOF);
 	ASSERT_EQ(cfeof(csample) , 1);
 }
