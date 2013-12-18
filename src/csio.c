@@ -136,154 +136,154 @@ get_gzip_header(FILE* stream, GZIPHeader* hdr)
 				hdr->chlen = *(uint16_t*)&xhdr[2];
 				if (*(uint16_t*)&xhdr[4]*2 > subdataln-2*3)
 					{ errno = EFAULT; return -1; }
-				hdr->chcnt = *(uint16_t*)&xhdr[4];
-				if (fread((void*)hdr->chunks, 2,
-				          hdr->chcnt, stream) != hdr->chcnt)
+					hdr->chcnt = *(uint16_t*)&xhdr[4];
+					if (fread((void*)hdr->chunks, 2,
+						hdr->chcnt, stream) != hdr->chcnt)
+					{
+						hdr->chcnt = 0;
+						return -1;
+					}
+				}
+				else
 				{
-					hdr->chcnt = 0;
+					fseek(stream, subdataln - 2*2, SEEK_CUR);
+				}
+				pos += subdataln + 2*2;
+			}
+		}
+		if (hdr->flg  & FNAME)
+			hdr->fnamelen = skip_cstr(stream);
+		if (hdr->flg  & FCOMMENT)
+			hdr->commentlen = skip_cstr(stream);
+		if (hdr->flg  & FHCRC)
+			fseek(stream, 2, SEEK_CUR);
+		if (hdr->chcnt == 0)
+		{
+			/* TODO: skipping to the member implemented  only for dictzip*/
+			errno = ENOSYS;
+			return -1;
+		}
+		hdr->dataoff = ftello(stream);
+		size_t i, dataskip = 0;
+		for(i = 0; i < hdr->chcnt; ++i)
+			dataskip += hdr->chunks[i];
+		fseek(stream, dataskip + 4 + EMPTY_FINISH_BLOCK_LEN, SEEK_CUR);
+		if (fread((void*)&hdr->isize, 1, 4, stream) != 4)
+		{
+			errno = EFAULT;
+			return -1;
+		}
+		return 1;
+	}
+
+	/**@brief walk through gzip members and summarize info from headers
+	* @return -1 on error, 1 on success*/
+	int
+	get_gzip_stat(FILE* stream,
+		size_t *mem_count, size_t *chunks_count, size_t *streamsz)
+	{
+		if (!stream)
+		{
+			errno = EINVAL;
+			return -1;
+		}
+		*mem_count = 0;
+		*chunks_count = 0;
+		*streamsz = 0;
+		GZIPHeader hdr;
+		while(get_gzip_header(stream, &hdr) == 1)
+		{
+			*mem_count += 1;
+			*chunks_count += hdr.chcnt;
+			*streamsz += hdr.isize;
+		}
+		return 1;
+	}
+
+	/**@brief clear CFILE structure
+	* @note no memory free*/
+	int
+	clear(CFILE* cstream)
+	{
+		cstream->stream = NULL;
+		cstream->currpos = 0;
+		cstream->chlen = 0;
+		cstream->size = 0;
+		cstream->bufoff = 0;
+		cstream->bufsz = 0;
+		cstream->need_close = 0;
+		cstream->compression = NONE;
+		memset(cstream->buf, 0, 0x10000);
+		cstream->idxsz = 0;
+		cstream->idx = NULL;
+		cstream->init_magic = 0;
+		cstream->eof = 0;
+		return 0;
+	}
+
+	/**@brief Creates dictzip index
+	*
+	* DICTZIP index is the array of chunks offsets
+	* TODO: In theory, chlen must not be identical in all gzip members.
+	* This situation is not supported for now.
+	* @return On success returns 1. In that case memory for idx was
+	* allocated and must be freed*/
+	int
+	init_dictzip(FILE* stream, CFILE* cstream)
+	{
+		size_t mcnt, chcnt, streamsz;
+		if (stream == NULL || cstream == NULL)
+			return -1;
+		clear(cstream);
+		get_gzip_stat(stream, &mcnt, &chcnt, &streamsz);
+		if (chcnt == 0 || mcnt == 0 || streamsz == 0)
+			return 0;
+		GZIPHeader hdr;
+		uint64_t* idx = NULL;
+		fseeko(stream, 0, SEEK_SET);
+		size_t i = 0;
+		while(get_gzip_header(stream, &hdr) == 1)
+		{
+			if (hdr.chcnt == 0)
+				continue;
+			if (hdr.chlen == 0)
+				continue;
+			if (i == 0)
+			{
+				cstream->zst.zalloc    = NULL;
+				cstream->zst.zfree     = Z_NULL;
+				cstream->zst.opaque    = Z_NULL;
+				cstream->zst.avail_in  = 0;
+				cstream->zst.avail_out = 0;
+				cstream->zst.total_in  = 0;
+				cstream->zst.total_out = 0;
+				cstream->zst.next_in   = 0;
+				cstream->zst.next_out  = 0;
+				if( inflateInit2(&cstream->zst, -MAX_WBITS) != Z_OK)
+				{
+					errno = EFAULT;
 					return -1;
 				}
+				cstream->stream = stream;
+				cstream->compression = DICTZIP;
+				cstream->bufsz = 0;
+				cstream->bufoff = 0;
+				cstream->chlen = hdr.chlen;
+				cstream->idx = (char*)malloc(chcnt*8 + 8);
+				memset(cstream->idx, 0, chcnt*8 + 8);
+				cstream->size = streamsz;
+				if (!cstream->idx)
+				{
+					errno = EFAULT;
+					return -1;
+				}
+				cstream->idxsz = chcnt*8;
+				idx = (uint64_t*)cstream->idx;
 			}
-			else
-			{
-				fseek(stream, subdataln - 2*2, SEEK_CUR);
-			}
-			pos += subdataln + 2*2;
-		}
-	}
-	if (hdr->flg  & FNAME)
-		hdr->fnamelen = skip_cstr(stream);
-	if (hdr->flg  & FCOMMENT)
-		hdr->commentlen = skip_cstr(stream);
-	if (hdr->flg  & FHCRC)
-		fseek(stream, 2, SEEK_CUR);
-	if (hdr->chcnt == 0)
-	{
-		/* TODO: skipping to the member implemented  only for dictzip*/
-		errno = ENOSYS;
-		return -1;
-	}
-	hdr->dataoff = ftello(stream);
-	size_t i, dataskip = 0;
-	for(i = 0; i < hdr->chcnt; ++i)
-		dataskip += hdr->chunks[i];
-	fseek(stream, dataskip + 4 + EMPTY_FINISH_BLOCK_LEN, SEEK_CUR);
-	if (fread((void*)&hdr->isize, 1, 4, stream) != 4)
-	{
-		errno = EFAULT;
-		return -1;
-	}
-	return 1;
-}
-
-/**@brief walk through gzip members and summarize info from headers
- * @return -1 on error, 1 on success*/
-int
-get_gzip_stat(FILE* stream,
-              size_t *mem_count, size_t *chunks_count, size_t *streamsz)
-{
-	if (!stream)
-	{
-		errno = EINVAL;
-		return -1;
-	}
-	*mem_count = 0;
-	*chunks_count = 0;
-	*streamsz = 0;
-	GZIPHeader hdr;
-	while(get_gzip_header(stream, &hdr) == 1)
-	{
-		*mem_count += 1;
-		*chunks_count += hdr.chcnt;
-		*streamsz += hdr.isize;
-	}
-	return 1;
-}
-
-/**@brief clear CFILE structure
- * @note no memory free*/
-int
-clear(CFILE* cstream)
-{
-	cstream->stream = NULL;
-	cstream->currpos = 0;
-	cstream->chlen = 0;
-	cstream->size = 0;
-	cstream->bufoff = 0;
-	cstream->bufsz = 0;
-	cstream->need_close = 0;
-	cstream->compression = NONE;
-	memset(cstream->buf, 0, 0x10000);
-	cstream->idxsz = 0;
-	cstream->idx = NULL;
-	cstream->init_magic = 0;
-	cstream->eof = 0;
-	return 0;
-}
-
-/**@brief Creates dictzip index
- *
- * DICTZIP index is the array of chunks offsets
- * TODO: In theory, chlen must not be identical in all gzip members.
- * This situation is not supported for now.
- * @return On success returns 1. In that case memory for idx was
- * allocated and must be freed*/
-int
-init_dictzip(FILE* stream, CFILE* cstream)
-{
-	size_t mcnt, chcnt, streamsz;
-	if (stream == NULL || cstream == NULL)
-		return -1;
-	clear(cstream);
-	get_gzip_stat(stream, &mcnt, &chcnt, &streamsz);
-	if (chcnt == 0 || mcnt == 0 || streamsz == 0)
-		return 0;
-	GZIPHeader hdr;
-	uint64_t* idx = NULL;
-	fseeko(stream, 0, SEEK_SET);
-	size_t i = 0;
-	while(get_gzip_header(stream, &hdr) == 1)
-	{
-		if (hdr.chcnt == 0)
-			continue;
-		if (hdr.chlen == 0)
-			continue;
-		if (i == 0)
-		{
-			cstream->zst.zalloc    = NULL;
-			cstream->zst.zfree     = Z_NULL;
-			cstream->zst.opaque    = Z_NULL;
-			cstream->zst.avail_in  = 0;
-			cstream->zst.avail_out = 0;
-			cstream->zst.total_in  = 0;
-			cstream->zst.total_out = 0;
-			cstream->zst.next_in   = 0;
-			cstream->zst.next_out  = 0;
-			if( inflateInit2(&cstream->zst, -MAX_WBITS) != Z_OK)
-			{
-				errno = EFAULT;
-				return -1;
-			}
-			cstream->stream = stream;
-			cstream->compression = DICTZIP;
-			cstream->bufsz = 0;
-			cstream->bufoff = 0;
-			cstream->chlen = hdr.chlen;
-			cstream->idx = (char*)malloc(chcnt*8 + 8);
-			memset(cstream->idx, 0, chcnt*8 + 8);
-			cstream->size = streamsz;
-			if (!cstream->idx)
-			{
-				errno = EFAULT;
-				return -1;
-			}
-			cstream->idxsz = chcnt*8;
-			idx = (uint64_t*)cstream->idx;
-		}
-		idx[i] = hdr.dataoff;
-		++i;
-		size_t j;
-		for(j = 0; j < hdr.chcnt - 1; ++j)
+			idx[i] = hdr.dataoff;
+			++i;
+			size_t j;
+			for(j = 0; j < hdr.chcnt - 1; ++j)
 		{
 			if(i >= chcnt)
 			{
@@ -592,9 +592,17 @@ cfread(void* dest, size_t size, size_t count, CFILE* stream)
 		{
 			if (fill_buf(stream, pos) != 1)
 				return copied;
+			if (pos < stream->bufoff
+			 || pos >= stream->bufoff + stream->bufsz)
+			{
+				errno = EFAULT;
+				return 0;
+			}
 			off_t copyend = end < stream->bufoff + stream->bufsz ?
 					end : stream->bufoff + stream->bufsz;
-			memcpy((char*)dest + copied, stream->buf, copyend - pos);
+			memcpy((char*)dest + copied,
+				stream->buf + pos - stream->bufoff,
+				copyend - pos);
 			copied += copyend - pos;
 			pos = copyend;
 		}
