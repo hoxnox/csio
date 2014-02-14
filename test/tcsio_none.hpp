@@ -36,6 +36,11 @@ protected:
 	CFILE* csample;
 };
 
+TEST_F(TestCSIONone, additional_fields)
+{
+	ASSERT_EQ(csample->size, 256);
+}
+
 TEST_F(TestCSIONone, get_compression)
 {
 	ASSERT_EQ(get_compression(sample), NONE);
@@ -57,6 +62,7 @@ TEST_F(TestCSIONone, cfread )
 	ASSERT_EQ(buf[256-1] , 0);
 	ASSERT_EQ(buf[256] , 1);
 	ASSERT_EQ(cfeof(csample) , 1);
+	ASSERT_EQ(cfgetc(csample), EOF);
 }
 
 TEST_F(TestCSIONone, cfgetc )
