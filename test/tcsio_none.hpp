@@ -121,5 +121,13 @@ TEST_F(TestCSIONone, cferror)
 	ASSERT_NE(cferror(cfile), 0);
 }
 
+TEST_F(TestCSIONone, FILE_is_opened_on_cfclose)
+{
+	ASSERT_NE(cfgetc(csample), EOF);
+	cfclose(&csample);
+	ASSERT_NE(fgetc(sample), EOF);
+	ASSERT_TRUE(csample == NULL);
+}
+
 #endif // __TCSIO_NONE_HPP__
 

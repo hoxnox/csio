@@ -225,5 +225,12 @@ TEST_F(TestCSIODictzip, cfseeko_cftello)
 	ASSERT_EQ(cfgetc(csample), EOF);
 }
 
+TEST_F(TestCSIODictzip, FILE_is_opened_on_cfclose)
+{
+	ASSERT_NE(cfgetc(csample), EOF);
+	cfclose(&csample);
+	ASSERT_NE(fgetc(sample), EOF);
+	ASSERT_TRUE(csample == NULL);
+}
 #endif // __TCSIO_DICTZIP_HPP__
 
