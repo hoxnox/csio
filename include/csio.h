@@ -1,5 +1,5 @@
 /**@author Merder Kim <hoxnox@gmail.com>
- * @date $date$
+ * @date 20140221 15:40:20
  *
  * Stdlib based compressed stream I/O library. It gives you ability
  * transparently work with compressed streams as if they are not.*/
@@ -24,6 +24,19 @@ typedef enum
 } CompressionMethod;
 
 static const int INITIALIZED = 0x484F584E;
+static const char GZIP_DEFLATE_ID[3] = {0x1f, 0x8b, 0x08};
+static const char FTEXT     = 1;
+static const char FHCRC     = 1 << 1;
+static const char FEXTRA    = 1 << 2;
+static const char FNAME     = 1 << 3;
+static const char FCOMMENT  = 1 << 4;
+static const char FRESERVED = 0xfe;
+static const char OS_CODE_UNIX = 3;
+
+#define CHUNK_SIZE 58315
+static const size_t   EMPTY_FINISH_BLOCK_LEN = 2;
+static const size_t   GZIP_CRC32_LEN = 4;
+
 
 typedef struct {
 	FILE*             stream;

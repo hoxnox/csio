@@ -1,5 +1,5 @@
-# @author $username$ <$usermail$>
-# @date $date$
+# @author Merder Kim <hoxnox@gmail.com>
+# @date 20140221 15:40:20
 # csio cmake build script
 
 cmake_minimum_required(VERSION 2.6.4)
@@ -11,6 +11,7 @@ option(WITH_TESTS "Build tests."  OFF)
 option(WITH_DOCS  "Generate docs." OFF)
 option(WITH_SHARED_LIBS "Build shared libraries." OFF)
 option(WITH_STATIC_LIBS "Build static libraries." ON)
+option(WITH_dzip        "Build dzip compress utility" ON)
 option(CSIO_FORCE_SHARED_CRT
 	"Use shared run-time lib even when csio is built as static lib." OFF)
 
@@ -40,7 +41,7 @@ set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}"
 include_directories("${PROJECT_SOURCE_DIR}/src"
                     "${PROJECT_SOURCE_DIR}/include")
 
-###########################################################################
+########################################################################
 # zlib
 
 find_package(ZLIB REQUIRED)
@@ -48,11 +49,25 @@ include_directories(${ZLIB_INCLUDE_DIRS})
 list(APPEND LIBRARIES ${ZLIB_LIBRARIES})
 
 ########################################################################
+# dzip
+
+if(WITH_dzip)
+	find_package(Threads REQUIRED)
+	if (NOT CMAKE_USE_PTHREADS_INIT)
+		message(FATAL_ERROR "dzip utility needs pthreads")
+	endif()
+	set(DZIP_SRC ./src/dzip.c)
+	add_executable(dzip ${DZIP_SRC})
+	target_link_libraries(dzip pthread)
+	set_target_properties(dzip PROPERTIES COMPILE_FLAGS "-std=c99")
+endif()
+
+########################################################################
 # csio
 
 set(CSIO_SRC include/csio.h
              src/csio.c)
-nx_add_library(csio ${CSIO_FORCE_SHARED_CRT} ${WITH_STATIC_LIBS} 
+nx_add_library(csio ${CSIO_FORCE_SHARED_CRT} ${WITH_STATIC_LIBS}
 	${WITH_SHARED_LIBS} "CSIO_SHARED"
 	"${csio_VERSION_MAJOR}-${csio_VERSION_MINOR}-${csio_VERSION_PATCH}"
 	"${CSIO_SRC}")
