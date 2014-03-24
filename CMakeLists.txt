@@ -56,9 +56,12 @@ if(WITH_dzip)
 	if (NOT CMAKE_USE_PTHREADS_INIT)
 		message(FATAL_ERROR "dzip utility needs pthreads")
 	endif()
-	set(DZIP_SRC ./src/dzip.c)
+	add_library(cqueue STATIC ./src/dzip.h ./src/cqueue.h ./src/cqueue.c)
+	list(APPEND LIBRARIES cqueue pthread)
+	set(DZIP_SRC ./src/dzip.c
+	             ./src/dzip.h)
 	add_executable(dzip ${DZIP_SRC})
-	target_link_libraries(dzip pthread)
+	target_link_libraries(dzip ${LIBRARIES})
 	set_target_properties(dzip PROPERTIES COMPILE_FLAGS "-std=c99")
 endif()
 
@@ -97,15 +100,13 @@ if(WITH_TESTS)
 	set(SOURCES_TEST
 		./test/test.cpp
 		./test/tcsio_none.hpp
-		./test/tcsio_dictzip.hpp)
+		./test/tcsio_dictzip.hpp
+		./test/tcqueue.hpp)
 	enable_testing()
 	find_package(GTest REQUIRED)
 	include_directories(${GTEST_INCLUDE_DIRS})
 	set(TEST test_${PROJECT_NAME})
 	add_executable(${TEST} ${SOURCES_TEST})
-	if(NOT WIN32)
-		list(APPEND LIBRARIES pthread)
-	endif(NOT WIN32)
 	target_link_libraries("${TEST}" ${GTEST_LIBRARIES} ${LIBRARIES})
 	nx_GTEST_ADD_TESTS("${TEST}" ${SOURCES_TEST})
 endif()
