@@ -52,6 +52,7 @@ typedef struct {
 	char*             idx;
 	z_stream          zst;
 	int               init_magic;
+	int               eof;
 } CFILE;
 
 
@@ -71,4 +72,4 @@ CSIO_API int    cfgetc(CFILE* stream);
 }
 #endif
 
-#endif // __CSIO_H__
+#endif

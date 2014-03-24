@@ -31,7 +31,7 @@ set(csio_VERSION_PATCH 1)
 set(TEST_SAMPLES_DIR "${PROJECT_SOURCE_DIR}/test/samples/")
 configure_file(
 	"${PROJECT_SOURCE_DIR}/src/csio_config.cfg"
-	"${PROJECT_SOURCE_DIR}/src/csio_config.h"
+	"${PROJECT_SOURCE_DIR}/include/csio_config.h"
 	ESCAPE_QUOTES
 )
 

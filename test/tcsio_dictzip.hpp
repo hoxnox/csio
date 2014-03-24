@@ -1,5 +1,5 @@
-/**@author $username$ <$usermail$>
- * @date $date$ */
+/**@author hoxnox <hoxnox@gmail.com>
+ * @date 20131217 15:33:12 */
 
 #ifndef __TCSIO_DICTZIP_HPP__
 #define __TCSIO_DICTZIP_HPP__
@@ -146,24 +146,38 @@ TEST_F(TestCSIODictzip, cfread)
 	char* buf = new char[BUFSZ + 1];
 	memset(buf, 1, BUFSZ + 1);
 	ASSERT_EQ(cfread((void*)buf, 1, BUFSZ, csample), BUFSZ);
-	ASSERT_EQ(cfeof(csample), 1);
+	ASSERT_EQ(cfeof(csample), 0);
 	ASSERT_EQ(buf[BUFSZ - 1] , 0);
 	ASSERT_EQ(buf[BUFSZ] , 1);
+	ASSERT_EQ(cfread((void*)buf, 1, 1, csample), 0);
+	ASSERT_EQ(cfeof(csample), 0);
 	delete [] buf;
 }
 
 TEST_F(TestCSIODictzip, cfgetc)
 {
 	char* buf = new char[256*1024 + 1];
+	ASSERT_EQ(cfgetc(csample), 0);
+	ASSERT_EQ(csample->currpos, 1);
 	// cfread on the border
 	cfseeko(csample, 0x7ffa*csample->chlen - 2, SEEK_SET);
+	ASSERT_EQ(csample->currpos, 0x7ffa*csample->chlen - 2);
 	ASSERT_EQ(cfgetc(csample), 0);
+	ASSERT_EQ(csample->currpos, 0x7ffa*csample->chlen - 1);
 	ASSERT_EQ(cfgetc(csample), 0);
+	ASSERT_EQ(csample->currpos, 0x7ffa*csample->chlen);
 	ASSERT_EQ(cfgetc(csample), 0);
+	ASSERT_EQ(csample->currpos, 0x7ffa*csample->chlen + 1);
 	// to the end
-	cfseeko(csample, 0x7ffa*csample->chlen + csample->chlen, SEEK_SET);
+	cfseeko(csample, csample->size - 2, SEEK_SET);
+	ASSERT_EQ(csample->currpos, csample->size - 2);
 	ASSERT_EQ(cfgetc(csample), 0);
+	ASSERT_EQ(csample->currpos, csample->size - 1);
+	ASSERT_EQ(cfgetc(csample), 0);
+	ASSERT_EQ(cfeof(csample), 0);
+	ASSERT_EQ(csample->currpos, csample->size);
 	ASSERT_EQ(cfgetc(csample), EOF);
+	ASSERT_EQ(csample->currpos, csample->size);
 	ASSERT_EQ(cfeof(csample), 1);
 	delete [] buf;
 }
@@ -211,5 +225,12 @@ TEST_F(TestCSIODictzip, cfseeko_cftello)
 	ASSERT_EQ(cfgetc(csample), EOF);
 }
 
+TEST_F(TestCSIODictzip, FILE_is_opened_on_cfclose)
+{
+	ASSERT_NE(cfgetc(csample), EOF);
+	cfclose(&csample);
+	ASSERT_NE(fgetc(sample), EOF);
+	ASSERT_TRUE(csample == NULL);
+}
 #endif // __TCSIO_DICTZIP_HPP__
 
