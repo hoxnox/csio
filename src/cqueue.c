@@ -37,7 +37,7 @@ is_chunks_queue_empty(FileChunksQueue* queue)
 		pthread_mutex_unlock(&queue->mtx);
 		return 1;
 	}
-	if (queue->back == queue->front)
+	if (queue->back == &queue->end || queue->front == &queue->end)
 	{
 		pthread_mutex_unlock(&queue->mtx);
 		return 1;
@@ -52,7 +52,7 @@ is_chunks_queue_closed(FileChunksQueue* queue)
 	return queue->last_element_datasz != 0;
 }
 
-/**@return 1 on success, -1 on error */
+/**@return 0 on success, -1 on error */
 int
 push_back_chunks_queue(FileChunksQueue* queue, char* data,
 		size_t datasz, unsigned short chunk_no)
@@ -89,7 +89,7 @@ push_back_chunks_queue(FileChunksQueue* queue, char* data,
 	aux->prev = queue->back;
 	queue->end.prev = aux;
 	aux->next = &(queue->end);
-	if (queue->back == queue->front)
+	if (queue->front == &queue->end)
 		queue->front = aux;
 	queue->back = aux;
 	if (datasz != CHUNK_SIZE)
@@ -98,7 +98,7 @@ push_back_chunks_queue(FileChunksQueue* queue, char* data,
 	aux->chunk_no = chunk_no;
 	pthread_cond_signal(&queue->can_pop);
 	pthread_mutex_unlock(&queue->mtx);
-	return 1;
+	return 0;
 }
 
 int
@@ -123,7 +123,7 @@ pop_front_chunks_queue(FileChunksQueue* queue)
 		pthread_mutex_unlock(&queue->mtx);
 		return result;
 	}
-	if (queue->back == queue->front)
+	if (queue->back == &queue->end || queue->front == &queue->end)
 	{
 		pthread_mutex_unlock(&queue->mtx);
 		return result;

@@ -5,19 +5,6 @@
 #include <errno.h>
 #include <zlib.h>
 
-static const char GZIP_DEFLATE_ID[3] = {0x1f, 0x8b, 0x08};
-static const char FTEXT     = 1;
-static const char FHCRC     = 1 << 1;
-static const char FEXTRA    = 1 << 2;
-static const char FNAME     = 1 << 3;
-static const char FCOMMENT  = 1 << 4;
-static const char FRESERVED = 0xfe;
-static const char OS_CODE_UNIX = 3;
-
-static const uint16_t CHUNK_SIZE = 58315;
-static const size_t   EMPTY_FINISH_BLOCK_LEN = 2;
-static const size_t   GZIP_CRC32_LEN = 4;
-
 /**@brief stdio fopen analogue
  *
  * If the file is compressed with supported format, the library will

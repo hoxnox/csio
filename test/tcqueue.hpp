@@ -20,10 +20,45 @@ protected:
 	FileChunksQueue queue;
 };
 
-TEST_F(TestCQueue, simple)
+TEST_F(TestCQueue, main_functionality)
 {
-	char data[] = "DATA";
-	push_back_chunks_queue(&queue, data, sizeof(data), 1);
+	EXPECT_TRUE(is_chunks_queue_empty(&queue));
+	EXPECT_FALSE(is_chunks_queue_closed(&queue));
+	char data[CHUNK_SIZE];
+	memset(data, 1, sizeof(data));
+	ASSERT_EQ(push_back_chunks_queue(&queue, data, sizeof(data), 1), 0);
+	ASSERT_FALSE(is_chunks_queue_empty(&queue));
+	EXPECT_FALSE(is_chunks_queue_closed(&queue));
+	ASSERT_EQ(queue.front->chunk_no, 1);
+	ASSERT_EQ(queue.front, queue.back);
+	ASSERT_NE(queue.front, &queue.end);
+	ASSERT_NE(queue.back, &queue.end);
+	size_t i = 3;
+	for (; i < 10; ++i)
+	{
+		ASSERT_EQ(push_back_chunks_queue(&queue, data, sizeof(data), i), 0);
+		ASSERT_EQ(queue.front->chunk_no, 1);
+		ASSERT_EQ(queue.back->chunk_no, i);
+		ASSERT_NE(queue.front, &queue.end);
+		ASSERT_NE(queue.back, &queue.end);
+		ASSERT_EQ(queue.end.next, queue.front);
+		ASSERT_EQ(queue.end.prev, queue.back);
+		ASSERT_EQ(queue.front->prev, &queue.end);
+		ASSERT_EQ(queue.back->next, &queue.end);
+		ASSERT_FALSE(is_chunks_queue_empty(&queue));
+		EXPECT_FALSE(is_chunks_queue_closed(&queue));
+	}
+	ASSERT_EQ(push_back_chunks_queue(&queue, data, sizeof(data) - 2, i+1), 0);
+	ASSERT_EQ(queue.front->chunk_no, 1);
+	ASSERT_EQ(queue.back->chunk_no, i+1);
+	ASSERT_NE(queue.front, &queue.end);
+	ASSERT_NE(queue.back, &queue.end);
+	ASSERT_EQ(queue.end.next, queue.front);
+	ASSERT_EQ(queue.end.prev, queue.back);
+	ASSERT_EQ(queue.front->prev, &queue.end);
+	ASSERT_EQ(queue.back->next, &queue.end);
+	ASSERT_FALSE(is_chunks_queue_empty(&queue));
+	EXPECT_TRUE(is_chunks_queue_closed(&queue));
 }
 
 #endif // __TCQUEUE_HPP__
