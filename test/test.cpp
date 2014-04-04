@@ -7,7 +7,8 @@
 #include <gtest/gtest.h>
 #include "tcsio_none.hpp"
 #include "tcsio_dictzip.hpp"
-#include "tcqueue.hpp"
+#include "tzmq.hpp"
+#include "tMessages.hpp"
 
 // test cases
 

@@ -24,7 +24,7 @@ typedef enum
 } CompressionMethod;
 
 static const int INITIALIZED = 0x484F584E;
-static const char GZIP_DEFLATE_ID[3] = {0x1f, 0x8b, 0x08};
+static const char GZIP_DEFLATE_ID[3] = {(char)0x1f, (char)0x8b, (char)0x08};
 static const char FTEXT     = 1;
 static const char FHCRC     = 1 << 1;
 static const char FEXTRA    = 1 << 2;

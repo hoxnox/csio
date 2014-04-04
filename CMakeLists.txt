@@ -29,6 +29,7 @@ set(csio_VERSION_MINOR 0)
 set(csio_VERSION_PATCH 1)
 # configuration header
 set(TEST_SAMPLES_DIR "${PROJECT_SOURCE_DIR}/test/samples/")
+set(TEST_TMP_DIR "/tmp")
 configure_file(
 	"${PROJECT_SOURCE_DIR}/src/csio_config.cfg"
 	"${PROJECT_SOURCE_DIR}/include/csio_config.h"
@@ -52,24 +53,41 @@ list(APPEND LIBRARIES ${ZLIB_LIBRARIES})
 # dzip
 
 if(WITH_dzip)
+	find_package(ZMQ REQUIRED)
+	find_package(Glog REQUIRED)
+	include_directories(ZMQ_INCLUDE_DIRS)
+	include_directories(Glog_INCLUDE_DIRS)
+	list(APPEND LIBRARIES ${ZMQ_LIBRARIES} ${Glog_LIBRARIES})
 	find_package(Threads REQUIRED)
 	if (NOT CMAKE_USE_PTHREADS_INIT)
 		message(FATAL_ERROR "dzip utility needs pthreads")
 	endif()
-	add_library(cqueue STATIC ./src/dzip.h ./src/cqueue.h ./src/cqueue.c)
-	list(APPEND LIBRARIES cqueue pthread)
-	set(DZIP_SRC ./src/dzip.c
-	             ./src/dzip.h)
+	add_library(dzip_internal STATIC 
+		./src/ProcessManagerBase.hpp
+		./src/ProcessManagerBase.cpp
+		./src/Messages.hpp
+		./src/Messages.cpp
+		./src/CompressManager.hpp
+		./src/CompressManager.cpp
+		./src/Writer.hpp
+		./src/Writer.cpp
+		./src/Config.hpp
+		./src/Config.cpp
+		./src/Compressor.hpp
+		./src/Compressor.cpp
+	)
+	list(APPEND LIBRARIES dzip_internal)
+	set(DZIP_SRC ./src/dzip.cpp)
 	add_executable(dzip ${DZIP_SRC})
 	target_link_libraries(dzip ${LIBRARIES})
-	set_target_properties(dzip PROPERTIES COMPILE_FLAGS "-std=c99")
+	set_target_properties(dzip PROPERTIES COMPILE_FLAGS "-std=c++0x")
+	set_target_properties(dzip_internal PROPERTIES COMPILE_FLAGS "-std=c++0x")
 endif()
 
 ########################################################################
 # csio
 
-set(CSIO_SRC include/csio.h
-             src/csio.c)
+set(CSIO_SRC include/csio.h src/csio.c)
 nx_add_library(csio ${CSIO_FORCE_SHARED_CRT} ${WITH_STATIC_LIBS}
 	${WITH_SHARED_LIBS} "CSIO_SHARED"
 	"${csio_VERSION_MAJOR}-${csio_VERSION_MINOR}-${csio_VERSION_PATCH}"
@@ -101,12 +119,13 @@ if(WITH_TESTS)
 		./test/test.cpp
 		./test/tcsio_none.hpp
 		./test/tcsio_dictzip.hpp
-		./test/tcqueue.hpp)
+	)
 	enable_testing()
 	find_package(GTest REQUIRED)
 	include_directories(${GTEST_INCLUDE_DIRS})
 	set(TEST test_${PROJECT_NAME})
 	add_executable(${TEST} ${SOURCES_TEST})
+	set_target_properties(${TEST} PROPERTIES COMPILE_FLAGS "-std=c++0x")
 	target_link_libraries("${TEST}" ${GTEST_LIBRARIES} ${LIBRARIES})
 	nx_GTEST_ADD_TESTS("${TEST}" ${SOURCES_TEST})
 endif()
