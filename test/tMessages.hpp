@@ -16,9 +16,12 @@ protected:
 		int zero = 0;
 		sock_in = zmq_socket(zmq_ctx, ZMQ_PAIR);
 		ASSERT_TRUE(sock_in != NULL) << zmq_strerror(errno);
+		uint64_t sz = -1;
+		ASSERT_NE(zmq_setsockopt(sock_in, ZMQ_MAXMSGSIZE, &sz, sizeof(sz)), -1) << zmq_strerror(errno);
 		ASSERT_NE(zmq_setsockopt(sock_in, ZMQ_LINGER, &zero, sizeof(zero)), -1) << zmq_strerror(errno);
 		sock_out = zmq_socket(zmq_ctx, ZMQ_PAIR);
 		ASSERT_TRUE(sock_out != NULL) << zmq_strerror(errno);
+		ASSERT_NE(zmq_setsockopt(sock_out, ZMQ_MAXMSGSIZE, &sz, sizeof(sz)), -1) << zmq_strerror(errno);
 		ASSERT_NE(zmq_setsockopt(sock_out, ZMQ_LINGER, &zero, sizeof(zero)), -1) << zmq_strerror(errno);
 		ASSERT_NE(zmq_bind(sock_in, "inproc://test"), -1) << zmq_strerror(errno);
 		ASSERT_NE(zmq_connect(sock_out, "inproc://test"), -1) << zmq_strerror(errno);
@@ -38,6 +41,45 @@ protected:
 const std::string TestMessages::data_s("Hello, world!");
 const uint8_t* TestMessages::data = (const uint8_t*)data_s.c_str();
 const size_t TestMessages::datasz = data_s.length();
+
+TEST_F(TestMessages, BigMsgNative)
+{
+	uint8_t bigbuf[0xffff];
+	memset(bigbuf, 0xee, sizeof(bigbuf));
+	bigbuf[sizeof(bigbuf)/2] = 0x11;
+	bigbuf[sizeof(bigbuf) - 1] = 0;
+	zmq_msg_t msg;
+	zmq_msg_init_size(&msg, sizeof(bigbuf));
+	memcpy(zmq_msg_data(&msg), bigbuf, sizeof(bigbuf));
+	zmq_msg_send(&msg, sock_out, 0);
+	zmq_msg_t msg_;
+	zmq_msg_init(&msg_);
+	zmq_msg_recv(&msg_, sock_in, 0);
+	uint8_t* dt = (uint8_t*)zmq_msg_data(&msg_);
+	ASSERT_TRUE(std::equal(dt, dt + sizeof(bigbuf), bigbuf));
+	zmq_msg_close(&msg_);
+}
+
+TEST_F(TestMessages, BigMsg)
+{
+	uint8_t bigbuf[0x1ffff];
+	memset(bigbuf, 1, sizeof(bigbuf));
+	bigbuf[sizeof(bigbuf)/2] = 0x11;
+	bigbuf[sizeof(bigbuf) - 1] = 0;
+	Message msg(bigbuf, sizeof(bigbuf), 5);
+	ASSERT_EQ(msg.Type(), Message::TYPE_FCHUNK);
+	uint8_t* dt = msg.Data();
+	ASSERT_EQ(msg.DataSize(), sizeof(bigbuf));
+	ASSERT_TRUE(std::equal(dt, dt + msg.DataSize(), bigbuf));
+	ASSERT_EQ(msg.Num(), 5);
+	ASSERT_EQ(msg.Send(sock_out), sizeof(bigbuf) + 1 + 2) << zmq_strerror(errno);
+	Message msg_(sock_in);
+	ASSERT_EQ(msg_.Type(), Message::TYPE_FCHUNK);
+	dt = msg_.Data();
+	ASSERT_EQ(msg_.DataSize(), sizeof(bigbuf));
+	ASSERT_TRUE(std::equal(dt, dt + msg_.DataSize(), bigbuf));
+	ASSERT_EQ(msg_.Num(), 5);
+}
 
 TEST_F(TestMessages, MsgFChunk)
 {

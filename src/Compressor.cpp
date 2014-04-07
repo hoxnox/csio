@@ -66,7 +66,7 @@ Compressor::Start(Compressor* self)
 			MSG_ERROR.Send(sock_out_);
 			break;
 		}
-		sleep(1); // compress
+		VLOG(2) << self << " TODO: COMPRESSION " << msg.Num() << std::endl;
 		if (msg.Send(sock_out_) < msg.DataSize())
 		{
 			VLOG(2) << "Compressor (" << self << "):"

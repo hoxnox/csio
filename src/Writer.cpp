@@ -54,7 +54,8 @@ Writer::Start(Writer* self)
 			        << _(" Type: ") << msg.Type();
 			break;
 		}
-		sleep(1); // writing
+		VLOG(2) << "TODO: WRITING " << msg.Num() << std::endl;
+		// writing
 	}
 	zmq_close(sock);
 	return NULL;

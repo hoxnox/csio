@@ -15,6 +15,7 @@
 #include "Config.hpp"
 #include "Writer.hpp"
 #include "Compressor.hpp"
+#include "Messages.hpp"
 
 namespace csio {
 
@@ -64,6 +65,10 @@ private:
 	int         createSocks();
 	int         openFiles();
 	int         waitThreadsReady(const size_t timeout_ms);
+	int         makeInitialPush();
+	int         flushChunks();
+	int         processCompressorIncoming();
+	int         processWriterIncoming();
 
 private:
 	void* zmq_ctx_;
@@ -76,10 +81,17 @@ private:
 	std::unique_ptr<std::thread>               writer_;
 	std::vector<std::unique_ptr<std::thread> > workers_pool_;
 	std::unique_ptr<std::thread>               loop_;
+	std::set<Message>                          chunks_;
 
-	Config cfg_;
-	int    ofd_, ifd_;
-	bool   stop_;
+	Config       cfg_;
+	int          ofd_, ifd_;
+	bool         stop_;
+	size_t       wrseq_;
+	size_t       rdseq_;
+	const size_t CHUNKS_HIGH_WATERMARK;
+	int          pushing_semaphore_;
+	size_t       ifsize_;
+	size_t       bytes_compressed_;
 };
 
 } // namespace

@@ -6,6 +6,7 @@
 
 #include <zmq.h>
 #include <logging.hpp>
+#include <csio.h>
 
 namespace csio {
 
@@ -20,6 +21,13 @@ createSock(void* ctx, int type)
 		return NULL;
 	}
 	const int zero = 0;
+	const int64_t msgsz = CHUNK_SIZE + 10;
+	if (zmq_setsockopt(sock, ZMQ_MAXMSGSIZE, &msgsz, sizeof(msgsz)) == -1)
+	{
+		VLOG(2) << _("Error setting MAXMSGSIZE on socket.")
+		        << _(" Message: ") << zmq_strerror(errno);
+		return NULL;
+	}
 	if (zmq_setsockopt(sock, ZMQ_LINGER, &zero, sizeof(zero)) == -1)
 	{
 		VLOG(2) << _("Error setting LINGER on socket.")

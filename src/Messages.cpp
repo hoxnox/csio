@@ -12,23 +12,24 @@ const bool Message::BLOCKING_MODE = true;
 int
 Message::Send(void* sock, bool blocking /*=false*/) const
 {
+	zmq_msg_t msg;
 	if (!data_ || datasz_ == 0)
 		return 0;
-	zmq_msg_t msg;
 	if (zmq_msg_init_size(&msg, datasz_) == -1)
 	{
 		VLOG(2) << _("Error initializing zmq_msg_t in Send.")
 		        << _(" Message: ") << zmq_strerror(errno);
 	}
-	memcpy(&msg, data_.get(), datasz_);
-	int rs = zmq_sendmsg(sock, &msg, blocking ? 0 : ZMQ_DONTWAIT);
+	memcpy(zmq_msg_data(&msg), data_.get(), datasz_);
+	int rs = zmq_msg_send(&msg, sock, blocking ? 0 : ZMQ_DONTWAIT);
 	if (rs == -1)
 	{
 		VLOG_IF(2, errno != EAGAIN && errno != EWOULDBLOCK)
 			<< _("Error message sending.")
 			<< _(" Message: ") << zmq_strerror(errno);
 	}
-	zmq_msg_close(&msg);
+	// according to man page we mus not close message on send
+	// zmq_msg_close(&msg);
 	return rs;
 }
 

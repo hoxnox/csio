@@ -10,6 +10,7 @@
 #include <endians.hpp>
 #include <algorithm>
 #include <memory>
+#include <cstring>
 
 namespace csio {
 
@@ -28,6 +29,7 @@ public:
 	Message(void* sock, bool blocking = false) { Fetch(sock, blocking); }
 	Message(const uint8_t* data, size_t datasz, uint16_t num);
 	Message(const std::string& msg);
+	Message(const Message& msg) { operator=(msg); }
 
 	virtual ~Message() { Clear(); }
 
@@ -42,9 +44,20 @@ public:
 	std::string What() const;
 
 	bool operator==(const Message& rhv) const;
+	bool operator<(const Message& rhv) const
+	{
+		if(Num() < rhv.Num())
+			return true;
+		return false;
+	}
+	Message& operator=(const Message& copy)
+	{
+		datasz_ = copy.datasz_;
+		data_.reset(new uint8_t[datasz_]);
+		memcpy(data_.get(), copy.data_.get(), datasz_);
+	}
+
 protected:
-	Message(const Message&) = delete;
-	Message& operator=(const Message&) = delete;
 	size_t   datasz_;
 	std::unique_ptr<uint8_t[]> data_;
 };
@@ -52,6 +65,7 @@ protected:
 const Message MSG_READY("READY");
 const Message MSG_ERROR("ERROR");
 const Message MSG_STOP("STOP");
+const Message MSG_BREAK("BREAK");
 
 
 ////////////////////////////////////////////////////////////////////////
