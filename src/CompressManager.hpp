@@ -50,9 +50,6 @@ namespace csio {
 class CompressManager : public ProcessManagerBase
 {
 public:
-
-	static const size_t TICK;
-
 	CompressManager(const Config& cfg);
 	~CompressManager();
 
@@ -69,6 +66,9 @@ private:
 	int         flushChunks();
 	int         processCompressorIncoming();
 	int         processWriterIncoming();
+	int         startNewMember();
+	Message     makeMemberHeaderTemplate(uint16_t chunks_count,
+	                                     std::string extra = "");
 
 private:
 	void* zmq_ctx_;
@@ -76,14 +76,8 @@ private:
 	void* sock_feedback_;
 	void* sock_writer_;
 
-	std::unique_ptr<Writer>                    writer_instance_;
-	std::vector<std::unique_ptr<Compressor> >  compressors_instances_;
-	std::unique_ptr<std::thread>               writer_;
-	std::vector<std::unique_ptr<std::thread> > workers_pool_;
-	std::unique_ptr<std::thread>               loop_;
-	std::set<Message>                          chunks_;
-
 	Config       cfg_;
+	int          hwm_; 
 	int          ofd_, ifd_;
 	bool         stop_;
 	size_t       wrseq_;
@@ -92,6 +86,18 @@ private:
 	int          pushing_semaphore_;
 	size_t       ifsize_;
 	size_t       bytes_compressed_;
+	std::string  ifbasename_;
+	u32be        ifmtime_;
+
+	std::vector<uint16_t> member_chunks_cnt_;
+	std::vector<uint16_t>::const_iterator chunks_cnt_;
+
+	std::unique_ptr<Writer>                    writer_instance_;
+	std::vector<std::unique_ptr<Compressor> >  compressors_instances_;
+	std::unique_ptr<std::thread>               writer_;
+	std::vector<std::unique_ptr<std::thread> > workers_pool_;
+	std::unique_ptr<std::thread>               loop_;
+	std::set<Message>                          chunks_;
 };
 
 } // namespace

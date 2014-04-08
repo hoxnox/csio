@@ -20,6 +20,7 @@ Config::SetDefaults()
 	force_ = false;
 	verbose_ = false;
 	compressors_count_ = 10;
+	compression_level_ = 9;
 }
 
 inline std::string

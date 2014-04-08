@@ -63,23 +63,28 @@ Message::Fetch(void* zmq_sock, bool blocking /*=false*/)
 		}
 		else
 		{
-			VLOG(2) << _("Error retrieving data"
-			             " from zmq_msg.");
+			VLOG(2) << _("Error retrieving data from zmq_msg.");
 		}
 	}
 	zmq_msg_close(&msg);
 }
 
-Message::Message(const uint8_t* data, size_t datasz, uint16_t num)
+Message::Message(void* sock, bool blocking)
+	: datasz_(0)
 {
-	datasz_ = datasz + 1 + 2;
+	Fetch(sock, blocking);
+}
+
+Message::Message(const uint8_t* data, size_t sz, uint16_t num)
+{
+	datasz_ = sz + 1 + 2;
 	data_.reset(new uint8_t[datasz_]);
 	memset(data_.get(), 0, datasz_);
 	data_[0] = TYPE_FCHUNK;
 	u16be num_(num);
 	memcpy(data_.get() + 1, num_.bytes, 2);
-	if (data && datasz > 0)
-		memcpy(data_.get() + 1 + 2, data, datasz_);
+	if (data && sz > 0)
+		memcpy(data_.get() + 1 + 2, data, sz);
 }
 
 Message::Message(const std::string& msg)

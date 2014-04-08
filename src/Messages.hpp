@@ -26,7 +26,7 @@ public:
 	static const bool BLOCKING_MODE;
 
 	Message() : datasz_(0) { }
-	Message(void* sock, bool blocking = false) { Fetch(sock, blocking); }
+	Message(void* sock, bool blocking = false);
 	Message(const uint8_t* data, size_t datasz, uint16_t num);
 	Message(const std::string& msg);
 	Message(const Message& msg) { operator=(msg); }
@@ -66,6 +66,7 @@ const Message MSG_READY("READY");
 const Message MSG_ERROR("ERROR");
 const Message MSG_STOP("STOP");
 const Message MSG_BREAK("BREAK");
+const Message MSG_FILLN("FILLN");
 
 
 ////////////////////////////////////////////////////////////////////////
@@ -75,7 +76,7 @@ inline void
 Message::Clear()
 {
 	if(data_)
-		data_.reset();
+		data_.reset(NULL);
 	datasz_ = 0;
 }
 
@@ -123,9 +124,13 @@ Message::What() const
 inline bool 
 Message::operator==(const Message& rhv) const
 {
-	if (datasz_ != rhv.datasz_)
+	if (datasz_ != rhv.datasz_ || datasz_ == 0)
 		return false;
-	if (std::equal(data_.get(), data_.get() + datasz_, rhv.data_.get()))
+	uint8_t* lhv_data = data_.get();
+	uint8_t* rhv_data = rhv.data_.get();
+	if (!lhv_data || !rhv_data)
+		return false;
+	if (std::equal(lhv_data, lhv_data + datasz_, rhv_data))
 		return true;
 	return false;
 }

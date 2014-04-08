@@ -15,22 +15,62 @@
 
 namespace csio {
 
-const size_t CompressManager::TICK  = 10;
+
+/**
+ * DZIP file structure:
+ *
+ * 	+=============+=============+ ... +=============+
+ * 	|DZIP_MEMBER_1|DZIP_MEMBER_2|     |DZIP_MEMBER_N|
+ * 	+=============+=============+ ... +=============+
+ *
+ * DZIP_MEMBER:
+ *
+ * 	+---+---+---+---+---+---+---+---+---+---+  
+ * 	|x1F|x8B|x08|FLG|     MTIME     |XFL|OS |->
+ * 	+---+---+---+---+---+---+---+---+---+---+  
+ * 	+===========+===========+===========+---+---+---+---+---+---+---+---+
+ * 	| RA_EXTRA  | FNAME     | CHUNKS    | CRC32         | SIZE          |
+ * 	+===========+===========+===========+---+---+---+---+---+---+---+---+
+ *
+ * 	FLG      - flags. FEXTRA|FNAME is used
+ * 	MTIME    - modification time of the original file
+ * 	XFL      - extra flags about the compression.
+ * 	OS       - operating system
+ * 	RA_EXTRA - RFC1952 formated Random Access header's extra field (later)
+ * 	FNAME    - zero terminated string - base (without directory) file name
+ * 	CHUNKS   - compressed file chunks (lengths are stored in RA_EXTRA)
+ * 	CRC32    - CRC-32
+ * 	SIZE     - data size in this member (unpacked)
+ *
+ * RA_EXTRA:
+ *
+ * 	+---+---+---+---+---+---+============+
+ * 	| VER=1 | CHLEN | CHCNT | CHUNK_DATA |
+ * 	+---+---+---+---+---+---+============+
+ *
+ * 	CHUNK_DATA - CHCNT 2-bytes lengths of compressed chunks
+ * 	CHLEN      - the length of one uncompressed chunk
+ * 	CHCNT      - count of 2-bytes lengths in CHUNK_DATA
+ *
+ * Only first member has valid MTIME and FNAME.
+ * */
+
 
 CompressManager::CompressManager(const Config& cfg)
 	: zmq_ctx_(zmq_init(0))
 	, sock_jobs_(NULL)
 	, sock_feedback_(NULL)
 	, sock_writer_(NULL)
-	, writer_instance_(new Writer(zmq_ctx_))
 	, cfg_(cfg)
+	, hwm_(cfg_.CompressorsCount()*2 + 5)
 	, ifd_(-1)
 	, ofd_(-1)
 	, stop_(false)
-	, CHUNKS_HIGH_WATERMARK(cfg.CompressorsCount()*4)
+	, CHUNKS_HIGH_WATERMARK(cfg.CompressorsCount()*2)
 	, pushing_semaphore_(cfg.CompressorsCount()*(-1))
 	, ifsize_(0)
 	, bytes_compressed_(0)
+	, writer_instance_(new Writer(zmq_ctx_, hwm_))
 {
 	if (!zmq_ctx_)
 	{
@@ -41,7 +81,7 @@ CompressManager::CompressManager(const Config& cfg)
 	for(size_t i = 0; i < cfg_.CompressorsCount(); ++i)
 	{
 		compressors_instances_.push_back(
-			std::unique_ptr<Compressor>(new Compressor(zmq_ctx_)));
+		    std::unique_ptr<Compressor>(new Compressor(zmq_ctx_, cfg_)));
 	}
 };
 
@@ -57,6 +97,11 @@ CompressManager::~CompressManager()
 int
 CompressManager::makeInitialPush()
 {
+	rdseq_ = 0;
+	Message first_member_header = makeMemberHeaderTemplate(
+			*chunks_cnt_, cfg_.IFName());
+	first_member_header.Send(sock_writer_);
+
 	char buf[CHUNK_SIZE*cfg_.CompressorsCount()];
 	memset(buf, 0, sizeof(buf));
 	size_t rdsize =ifsize_ < CHUNK_SIZE*cfg_.CompressorsCount()
@@ -64,17 +109,16 @@ CompressManager::makeInitialPush()
 	int rs = read(ifd_, buf, rdsize);
 	if (rs == -1)
 	{
-		LOG(ERROR) << _("CompressorManager: error reading file.")
+		LOG(ERROR) << _("CompressManager: error reading file.")
 		           << _(" Message: ") << strerror(errno);
 		return -1;
 	}
-	rdseq_ = 0;
 	for (; rdseq_ < rs/CHUNK_SIZE; ++rdseq_)
 	{
 		Message msg((uint8_t*)buf + rdseq_*CHUNK_SIZE, CHUNK_SIZE, rdseq_ + 1);
 		if (msg.Send(sock_jobs_, Message::BLOCKING_MODE) < CHUNK_SIZE)
 		{
-			VLOG(2) << _("CompressorManager: error initially"
+			VLOG(2) << _("CompressManager: error initially"
 			             " pushing chunk #") << rdseq_;
 			return -1;
 		}
@@ -86,7 +130,7 @@ CompressManager::makeInitialPush()
 		if (msg.Send(sock_jobs_, Message::BLOCKING_MODE)
 				< rs - rdseq_*CHUNK_SIZE)
 		{
-			VLOG(2) << _("CompressorManager: error initially"
+			VLOG(2) << _("CompressManager: error initially"
 			             " pushing chunk #") << rdseq_;
 			return -1;
 		}
@@ -100,7 +144,7 @@ CompressManager::makeInitialPush()
 int
 CompressManager::flushChunks()
 {
-	while (!chunks_.empty() && chunks_.begin()->Num() == wrseq_ + 1)
+	while (!chunks_.empty() && chunks_.begin()->Num() == wrseq_ + 1  && !stop_)
 	{
 		if (chunks_.begin()->Send(sock_writer_, Message::BLOCKING_MODE)
 				< chunks_.begin()->DataSize())
@@ -122,7 +166,7 @@ CompressManager::processCompressorIncoming()
 	msg.Fetch(sock_feedback_);
 	if (msg == MSG_ERROR)
 	{
-		VLOG(2) << _("CompressorManager: received MSG_ERROR"
+		VLOG(2) << _("CompressManager: received MSG_ERROR"
 		             " from one of the Compressors.");
 		return -1;
 	}
@@ -130,7 +174,7 @@ CompressManager::processCompressorIncoming()
 	{
 		if (errno == EAGAIN || errno == EWOULDBLOCK)
 			return 0;
-		LOG(ERROR) << _("CompressorManager: error"
+		LOG(ERROR) << _("CompressManager: error"
 		                " fetching regular message")
 		           << _(" Message: ") << zmq_strerror(errno);
 		return -1;
@@ -139,13 +183,17 @@ CompressManager::processCompressorIncoming()
 	chunks_.insert(msg);
 	if (flushChunks() == -1)
 	{
-		LOG(ERROR) << _("CompressorManager: error transmitting"
+		LOG(ERROR) << _("CompressManager: error transmitting"
 		                " chunks to the writer");
 		return -1;
 	}
+	VLOG(2) << "SEMAPHORE: " << pushing_semaphore_;
 	if (bytes_compressed_ >= ifsize_)
 	{
+		if(pushing_semaphore_ == 0)
+			MSG_STOP.Send(sock_writer_);
 		MSG_STOP.Send(sock_jobs_);
+		++pushing_semaphore_;
 		return 0;
 	}
 	if (chunks_.empty() || (chunks_.end()->Num() - wrseq_ + 1 
@@ -153,23 +201,58 @@ CompressManager::processCompressorIncoming()
 	{
 		while (pushing_semaphore_ < 0 && bytes_compressed_ < ifsize_)
 		{
+			if (rdseq_ == *chunks_cnt_)
+			{
+				if (!chunks_.empty() || pushing_semaphore_
+						!= (-1)*cfg_.CompressorsCount())
+				{
+					return 0;
+				}
+				int rs = MSG_FILLN.Send(sock_writer_);
+				if (rs < MSG_FILLN.DataSize())
+				{
+					VLOG(2) << _("CompressManager: error sending"
+					             " MSG_FILLN to the writer.");
+					return -1;
+				}
+				++chunks_cnt_;
+				if (chunks_cnt_ == member_chunks_cnt_.end()
+						&& bytes_compressed_ < ifsize_)
+				{
+					VLOG(2) << _("CompressManager: chunks_cnt reached the"
+					             " end of member_chunks_cnt before EOF.");
+					return -1;
+				}
+				Message member_header = makeMemberHeaderTemplate(*chunks_cnt_);
+				rs = member_header.Send(sock_writer_);
+				if (rs < member_header.DataSize())
+				{
+					VLOG(2) << _("CompressManager: error sending"
+					             " new member header template to"
+					             " the writer.");
+					return -1;
+				}
+				rdseq_ = 0;
+				wrseq_ = 0;
+			}
 			char buf[CHUNK_SIZE];
 			memset(buf, 0, sizeof(buf));
 			int rs = read(ifd_, buf, sizeof(buf));
 			if (rs < 0)
 			{
-				LOG(ERROR) << _("CompressorManager: error file read.")
+				LOG(ERROR) << _("CompressManager: error file read.")
 				           << _(" Message: ") << strerror(errno);
 				return -1;
 			}
 			Message msg((uint8_t*)buf, rs, ++rdseq_);
 			if (msg.Send(sock_jobs_) < msg.DataSize())
 			{
-				LOG(ERROR) << _("CompressorManager: error transmitting "
+				LOG(ERROR) << _("CompressManager: error transmitting "
 				                " chunk to compress.")
 				           << " Message: " << zmq_strerror(errno);
 				return -1;
 			}
+			bytes_compressed_ += rs;
 			++pushing_semaphore_;
 		}
 	}
@@ -183,7 +266,7 @@ CompressManager::processWriterIncoming()
 	msg.Fetch(sock_writer_);
 	if (msg == MSG_ERROR)
 	{
-		VLOG(2) << _("CompressorManager: received MSG_ERROR"
+		VLOG(2) << _("CompressManager: received MSG_ERROR"
 		             " from the writer.");
 		return -1;
 	}
@@ -191,7 +274,7 @@ CompressManager::processWriterIncoming()
 	{
 		if (errno == EAGAIN || errno == EWOULDBLOCK)
 			return 0;
-		LOG(ERROR) << _("CompressorManager: error"
+		LOG(ERROR) << _("CompressManager: error"
 		                " fetching regular message")
 		           << _(" Message: ") << zmq_strerror(errno);
 		return -1;
@@ -207,18 +290,18 @@ CompressManager::loop(CompressManager* self)
 		self->Stop();
 		return;
 	}
+	self->pushing_semaphore_ = 0; // all Compressors have job
 	zmq_pollitem_t items[2] =  {
 		{self->sock_feedback_, 0, ZMQ_POLLIN, 0},
 		{self->sock_writer_,   0, ZMQ_POLLIN, 0}
 	};
 	self->wrseq_ = 0;
-	self->pushing_semaphore_ = 0;
 	while(!self->stop_)
 	{
 		int rs = zmq_poll(items, 2, TICK);
 		if (rs < 0)
 		{
-			LOG(ERROR) << _("CompressorManager: error polling.")
+			LOG(ERROR) << _("CompressManager: error polling.")
 			           << _(" Message: ") << zmq_strerror(errno);
 			break;
 		}
@@ -235,21 +318,59 @@ CompressManager::loop(CompressManager* self)
 				break;
 		}
 	}
-	self->Stop();
+	if (!self->stop_)
+		self->Stop();
 }
 
 int
 CompressManager::createSocks()
 {
-	sock_jobs_     = createBindSock(zmq_ctx_, "inproc://jobs",    ZMQ_PUSH);
-	sock_feedback_ = createBindSock(zmq_ctx_, "inproc://feedback",ZMQ_PULL);
-	sock_writer_   = createBindSock(zmq_ctx_, "inproc://writer",  ZMQ_PAIR);
+	sock_jobs_     = createBindSock(zmq_ctx_, "inproc://jobs",     ZMQ_PUSH, hwm_);
+	sock_feedback_ = createBindSock(zmq_ctx_, "inproc://feedback", ZMQ_PULL, hwm_);
+	sock_writer_   = createBindSock(zmq_ctx_, "inproc://writer",   ZMQ_PAIR, hwm_);
 	VLOG_IF(2, sock_jobs_     == NULL) << _("Error with jobs socket.");
 	VLOG_IF(2, sock_feedback_ == NULL) << _("Error with feedback socket.");
 	VLOG_IF(2, sock_writer_   == NULL) << _("Error with writer socket.");
 	if (!sock_jobs_ || !sock_feedback_ || !sock_writer_)
 		return -1;
 	return 0;
+}
+
+inline char* copy16(char*& pos, u16be num)
+{
+	memcpy(pos, num.bytes, 2);
+	pos += 2;
+	return pos;
+}
+
+Message
+CompressManager::makeMemberHeaderTemplate(uint16_t chunks_count,
+                                          std::string extra /*= ""*/)
+{
+	size_t datasz = 10;                           // gzip header
+	datasz += 2 + 2 + 2 + 2 + 2 + 2*chunks_count; // RA_EXTRA
+	datasz += extra.length() + 1;                 // FNAME
+	char* data = new char[datasz];
+	memset(data, 0, datasz);
+	char* pos = data;
+	
+	memcpy(pos, GZIP_DEFLATE_ID, 3);
+	pos += 3;
+	*pos++ = FEXTRA | FNAME;
+	*pos++ = cfg_.CompressionLevel() == Z_BEST_COMPRESSION ? 0x02 : 0;
+	*pos++ = OS_CODE_UNIX;
+
+	*pos++ = 'R';
+	*pos++ = 'A';
+	copy16(pos, 2 + 2 + 2 + 2*chunks_count);
+	copy16(pos, 1);
+	copy16(pos, CHUNK_SIZE);
+	copy16(pos, chunks_count);
+	if(!extra.empty())
+		memcpy(pos, extra.c_str(), extra.length());
+	Message msg((uint8_t*)data, datasz, 0);
+	delete [] data;
+	return msg;
 }
 
 int
@@ -269,7 +390,20 @@ CompressManager::openFiles()
 		           << _(" Filename: '") << cfg_.IFName() <<"'.";
 		return -1;
 	}
+
 	ifsize_ = fstat.st_size;
+	size_t chcnt = ifsize_ / CHUNK_SIZE;
+	if (ifsize_ % CHUNK_SIZE != 0)
+		++chcnt;
+	while (chcnt > CHUNKS_PER_MEMBER)
+	{
+		member_chunks_cnt_.push_back(CHUNKS_PER_MEMBER);
+		chcnt -= CHUNKS_PER_MEMBER;
+	}
+	if (chcnt > 0)
+		member_chunks_cnt_.push_back(chcnt);
+	chunks_cnt_ = member_chunks_cnt_.begin();
+
 	ifd_ = open(cfg_.IFName().c_str(), O_RDONLY);
 	if (ifd_ == -1)
 	{
@@ -367,7 +501,7 @@ CompressManager::doStart()
 		return false;
 	VLOG(2) << _("CompressManager: files opened.");
 
-	writer_.reset(new std::thread(Writer::Start, writer_instance_.get()));
+	writer_.reset(new std::thread(Writer::Start, writer_instance_.get(), ofd_));
 	for (size_t i = 0; i < cfg_.CompressorsCount(); ++i)
 	{
 		workers_pool_.push_back(std::unique_ptr<std::thread>(
@@ -379,6 +513,7 @@ CompressManager::doStart()
 	{
 		LOG(ERROR) << _("Some threads wasn't ready in given timeout.")
 		           << _(" Use verbose for more info.");
+		doStop();
 		return false;
 	}
 	loop_.reset(new std::thread(loop, this));
@@ -392,7 +527,7 @@ CompressManager::doStop()
 	VLOG(2) << "CompressManger: stopping.";
 	stop_ = true;
 	MSG_STOP.Send(sock_writer_);
-	for(size_t i = 0; i < cfg_.CompressorsCount(); ++i)
+	for(size_t i = 0; i < compressors_instances_.size(); ++i)
 		MSG_STOP.Send(sock_jobs_);
 	if (writer_)
 	{

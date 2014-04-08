@@ -29,6 +29,7 @@ public:
 	std::string OFName()           const { return ofname_; }
 	int         CompressionLevel() const { return compression_level_; }
 	int         CompressorsCount() const { return compressors_count_; }
+	int         MsgHWM()           const { return compressors_count_*2 + 5;}
 
 private:
 	bool        force_;

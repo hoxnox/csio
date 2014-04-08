@@ -12,6 +12,7 @@ using namespace csio;
 int
 main(int argc, char * argv[])
 {
+	std::ios::sync_with_stdio(false);
 	Config cfg;
 	if(argc < 2)
 	{

@@ -106,7 +106,8 @@ void ProcessManagerBase::loop()
 			continue;
 		} else {
 			LOG(INFO) << _("Received signal: ")
-			          << strsignal(fdsi.ssi_signo);
+			          << strsignal(fdsi.ssi_signo)
+			          << _(" STOPPING");
 			Stop();
 			break;
 		}
