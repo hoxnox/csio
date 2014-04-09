@@ -25,9 +25,9 @@ namespace csio {
  *
  * DZIP_MEMBER:
  *
- * 	+---+---+---+---+---+---+---+---+---+---+  
- * 	|x1F|x8B|x08|FLG|     MTIME     |XFL|OS |->
- * 	+---+---+---+---+---+---+---+---+---+---+  
+ * 	+---+---+---+---+---+---+---+---+---+---+---+---+
+ * 	|x1F|x8B|x08|FLG|     MTIME     |XFL|OS | XLEN  |->
+ * 	+---+---+---+---+---+---+---+---+---+---+---+---+
  * 	+===========+===========+===========+---+---+---+---+---+---+---+---+
  * 	| RA_EXTRA  | FNAME     | CHUNKS    | CRC32         | SIZE          |
  * 	+===========+===========+===========+---+---+---+---+---+---+---+---+
@@ -36,6 +36,7 @@ namespace csio {
  * 	MTIME    - modification time of the original file
  * 	XFL      - extra flags about the compression.
  * 	OS       - operating system
+ * 	XLEN     - total extra fields length (RA_EXTRA)
  * 	RA_EXTRA - RFC1952 formated Random Access header's extra field (later)
  * 	FNAME    - zero terminated string - base (without directory) file name
  * 	CHUNKS   - compressed file chunks (lengths are stored in RA_EXTRA)
@@ -44,10 +45,11 @@ namespace csio {
  *
  * RA_EXTRA:
  *
- * 	+---+---+---+---+---+---+============+
- * 	| VER=1 | CHLEN | CHCNT | CHUNK_DATA |
- * 	+---+---+---+---+---+---+============+
+ * 	+---+---+---+---+---+---+---+---+---+---+============+
+ * 	|x52|x41| EXLEN | VER=1 | CHLEN | CHCNT | CHUNK_DATA |
+ * 	+---+---+---+---+---+---+---+---+---+---+============+
  *
+ * 	EXLEN      - length of VER, CHLEN, CHCNT and CHUNK_DATA summary
  * 	CHUNK_DATA - CHCNT 2-bytes lengths of compressed chunks
  * 	CHLEN      - the length of one uncompressed chunk
  * 	CHCNT      - count of 2-bytes lengths in CHUNK_DATA
@@ -68,8 +70,12 @@ CompressManager::CompressManager(const Config& cfg)
 	, stop_(false)
 	, CHUNKS_HIGH_WATERMARK(cfg.CompressorsCount()*2)
 	, pushing_semaphore_(cfg.CompressorsCount()*(-1))
+	, pushing_semaphore_min_(0)
+	, mtime_(0)
 	, ifsize_(0)
 	, bytes_compressed_(0)
+	, member_bytes_compressed_(0)
+	, crc32_(crc32(0L, Z_NULL, 0))
 	, writer_instance_(new Writer(zmq_ctx_, hwm_))
 {
 	if (!zmq_ctx_)
@@ -94,25 +100,39 @@ CompressManager::~CompressManager()
 	compressors_instances_.clear();
 };
 
+inline std::string
+get_base_name(std::string path)
+{
+	return path;
+}
+
 int
 CompressManager::makeInitialPush()
 {
 	rdseq_ = 0;
-	Message first_member_header = makeMemberHeaderTemplate(
-			*chunks_cnt_, cfg_.IFName());
+	std::string bname = get_base_name(cfg_.IFName());
+	char msgbuf[MEMBER_HEADER_MINSZ + 0xffff + bname.length() + 1];
+	int rs = makeMemberHeaderTemplate(
+			*chunks_cnt_, msgbuf, sizeof(msgbuf), bname, mtime_);
+	if (rs == -1)
+	{
+		LOG(ERROR) << _("CompressManager: error creating member"
+		                " header.");
+		return -1;
+	}
+	Message first_member_header((uint8_t*)msgbuf, rs, 0);
 	first_member_header.Send(sock_writer_);
 
 	char buf[CHUNK_SIZE*cfg_.CompressorsCount()];
 	memset(buf, 0, sizeof(buf));
-	size_t rdsize =ifsize_ < CHUNK_SIZE*cfg_.CompressorsCount()
-		? ifsize_ : CHUNK_SIZE*cfg_.CompressorsCount();
-	int rs = read(ifd_, buf, rdsize);
+	rs = read(ifd_, buf, CHUNK_SIZE*cfg_.CompressorsCount());
 	if (rs == -1)
 	{
 		LOG(ERROR) << _("CompressManager: error reading file.")
 		           << _(" Message: ") << strerror(errno);
 		return -1;
 	}
+	pushing_semaphore_min_ = 0;
 	for (; rdseq_ < rs/CHUNK_SIZE; ++rdseq_)
 	{
 		Message msg((uint8_t*)buf + rdseq_*CHUNK_SIZE, CHUNK_SIZE, rdseq_ + 1);
@@ -122,6 +142,9 @@ CompressManager::makeInitialPush()
 			             " pushing chunk #") << rdseq_;
 			return -1;
 		}
+		crc32_ = crc32(crc32_, (Bytef*)buf + rdseq_*CHUNK_SIZE, CHUNK_SIZE);
+		member_bytes_compressed_ += CHUNK_SIZE;
+		--pushing_semaphore_min_;
 	}
 	if (rs % CHUNK_SIZE > 0)
 	{
@@ -134,7 +157,10 @@ CompressManager::makeInitialPush()
 			             " pushing chunk #") << rdseq_;
 			return -1;
 		}
+		crc32_ = crc32(crc32_, (Bytef*)buf + rdseq_*CHUNK_SIZE, rs % CHUNK_SIZE);
+		member_bytes_compressed_ += rs % CHUNK_SIZE;
 		++rdseq_;
+		--pushing_semaphore_min_;
 	}
 	bytes_compressed_ = rs;
 	VLOG(2) << _("Initial push with ") << rdseq_ << (" elements.");
@@ -190,13 +216,22 @@ CompressManager::processCompressorIncoming()
 	VLOG(2) << "SEMAPHORE: " << pushing_semaphore_;
 	if (bytes_compressed_ >= ifsize_)
 	{
-		if(pushing_semaphore_ == 0)
+		if (pushing_semaphore_ == pushing_semaphore_min_)
+		{
+			char buf[sizeof(Z_FINISH_TEMPLATE) + 4 + 4];
+			memcpy(buf, Z_FINISH_TEMPLATE, sizeof(Z_FINISH));
+			memcpy(buf + sizeof(Z_FINISH_TEMPLATE), &crc32_, 4);
+			memcpy(buf + 4 + sizeof(Z_FINISH_TEMPLATE), &member_bytes_compressed_, 4);
+			Message finish((uint8_t*)buf, sizeof(buf), 0);
+			finish.Send(sock_writer_);
+			MSG_FILLN.Send(sock_writer_);
 			MSG_STOP.Send(sock_writer_);
+			return -1;
+		}
 		MSG_STOP.Send(sock_jobs_);
-		++pushing_semaphore_;
 		return 0;
 	}
-	if (chunks_.empty() || (chunks_.end()->Num() - wrseq_ + 1 
+	if (chunks_.empty() || (chunks_.end()->Num() - wrseq_ + 1
 	                                               < CHUNKS_HIGH_WATERMARK))
 	{
 		while (pushing_semaphore_ < 0 && bytes_compressed_ < ifsize_)
@@ -204,7 +239,7 @@ CompressManager::processCompressorIncoming()
 			if (rdseq_ == *chunks_cnt_)
 			{
 				if (!chunks_.empty() || pushing_semaphore_
-						!= (-1)*cfg_.CompressorsCount())
+						!= pushing_semaphore_min_)
 				{
 					return 0;
 				}
@@ -223,7 +258,21 @@ CompressManager::processCompressorIncoming()
 					             " end of member_chunks_cnt before EOF.");
 					return -1;
 				}
-				Message member_header = makeMemberHeaderTemplate(*chunks_cnt_);
+
+				char buf[sizeof(Z_FINISH_TEMPLATE) + 4 + 4 + MEMBER_HEADER_MINSZ + 0xffff + 1];
+				rs = makeMemberHeaderTemplate(
+					*chunks_cnt_, buf + sizeof(Z_FINISH_TEMPLATE) + 4 + 4, sizeof(buf) - (4 + 4));
+				if (rs == -1)
+				{
+					LOG(ERROR) << _("CompressManager: error creating member"
+					                " header.");
+					return -1;
+				}
+				memcpy(buf, Z_FINISH_TEMPLATE, sizeof(Z_FINISH));
+				memcpy(buf + sizeof(Z_FINISH_TEMPLATE), &crc32_, 4);
+				memcpy(buf + 4 + sizeof(Z_FINISH_TEMPLATE), &member_bytes_compressed_, 4);
+				Message member_header((uint8_t*)buf, rs + sizeof(Z_FINISH_TEMPLATE) + 4 + 4, 0);
+				member_header.Send(sock_writer_);
 				rs = member_header.Send(sock_writer_);
 				if (rs < member_header.DataSize())
 				{
@@ -234,6 +283,8 @@ CompressManager::processCompressorIncoming()
 				}
 				rdseq_ = 0;
 				wrseq_ = 0;
+				crc32_ = crc32(0L, Z_NULL, 0);
+				member_bytes_compressed_ = 0;
 			}
 			char buf[CHUNK_SIZE];
 			memset(buf, 0, sizeof(buf));
@@ -244,6 +295,7 @@ CompressManager::processCompressorIncoming()
 				           << _(" Message: ") << strerror(errno);
 				return -1;
 			}
+			crc32_ = crc32(crc32_, (Bytef*)buf, rs);
 			Message msg((uint8_t*)buf, rs, ++rdseq_);
 			if (msg.Send(sock_jobs_) < msg.DataSize())
 			{
@@ -252,6 +304,7 @@ CompressManager::processCompressorIncoming()
 				           << " Message: " << zmq_strerror(errno);
 				return -1;
 			}
+			member_bytes_compressed_ += rs;
 			bytes_compressed_ += rs;
 			++pushing_semaphore_;
 		}
@@ -336,41 +389,51 @@ CompressManager::createSocks()
 	return 0;
 }
 
-inline char* copy16(char*& pos, u16be num)
+inline char* copy16(char*& pos, uint16_t num)
 {
-	memcpy(pos, num.bytes, 2);
+	memcpy(pos, &num, 2);
 	pos += 2;
 	return pos;
 }
 
-Message
+int
 CompressManager::makeMemberHeaderTemplate(uint16_t chunks_count,
-                                          std::string extra /*= ""*/)
+                                          char* buf, size_t bufsz,
+                                          std::string extra /*= ""*/,
+                                          uint32_t mtime /* = 0 */)
 {
-	size_t datasz = 10;                           // gzip header
-	datasz += 2 + 2 + 2 + 2 + 2 + 2*chunks_count; // RA_EXTRA
-	datasz += extra.length() + 1;                 // FNAME
-	char* data = new char[datasz];
-	memset(data, 0, datasz);
-	char* pos = data;
-	
+	size_t datasz = MEMBER_HEADER_MINSZ;
+	datasz += 2*chunks_count;
+	datasz += extra.length();
+	datasz += 1;
+	if (bufsz < datasz)
+	{
+		VLOG(2) << _("CompressManager: attempt to write header into"
+		             " small buffer.");
+		return -1;
+	}
+	memset(buf, 0, datasz);
+	char* pos = buf;
+
 	memcpy(pos, GZIP_DEFLATE_ID, 3);
 	pos += 3;
 	*pos++ = FEXTRA | FNAME;
+	memcpy(pos, &mtime, 4);
+	pos += 4;
 	*pos++ = cfg_.CompressionLevel() == Z_BEST_COMPRESSION ? 0x02 : 0;
 	*pos++ = OS_CODE_UNIX;
 
+	copy16(pos, 2 + 2 + 2 + 2 + 2 + 2*chunks_count);
 	*pos++ = 'R';
 	*pos++ = 'A';
 	copy16(pos, 2 + 2 + 2 + 2*chunks_count);
 	copy16(pos, 1);
 	copy16(pos, CHUNK_SIZE);
 	copy16(pos, chunks_count);
+	pos += 2*chunks_count;
 	if(!extra.empty())
 		memcpy(pos, extra.c_str(), extra.length());
-	Message msg((uint8_t*)data, datasz, 0);
-	delete [] data;
-	return msg;
+	return datasz;
 }
 
 int
@@ -390,7 +453,8 @@ CompressManager::openFiles()
 		           << _(" Filename: '") << cfg_.IFName() <<"'.";
 		return -1;
 	}
-
+	if(fstat.st_mtim.tv_sec < 0xFFFFFFFFL)
+		mtime_ = fstat.st_mtim.tv_sec;
 	ifsize_ = fstat.st_size;
 	size_t chcnt = ifsize_ / CHUNK_SIZE;
 	if (ifsize_ % CHUNK_SIZE != 0)
@@ -414,7 +478,7 @@ CompressManager::openFiles()
 		return -1;
 	}
 
-	mode_t omode = O_WRONLY | O_CREAT;
+	mode_t omode = O_WRONLY | O_CREAT | O_TRUNC;
 	if(!cfg_.Force())
 		omode |= O_EXCL;
 	ofd_ = open(cfg_.OFName().c_str(), omode, S_IRUSR | S_IWUSR | S_IRGRP

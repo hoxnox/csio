@@ -49,7 +49,8 @@ Compressor::Start(Compressor* self)
 	zst.total_out = 0;
 	zst.next_in   = NULL;
 	zst.next_out  = NULL;
-	if (deflateInit(&zst, self->cfg_.CompressionLevel()) != Z_OK)
+	int rs = deflateInit2(&zst, 9, Z_DEFLATED, -MAX_WBITS, DEF_MEM_LEVEL, 0);
+	if (rs != Z_OK)
 	{
 		LOG(ERROR) << "Compressor (" << self << "):"
 		           << _(" error initializing zstream.");
@@ -101,7 +102,25 @@ Compressor::Start(Compressor* self)
 		zst.next_out = (Bytef*)self->buf_;
 		zst.total_in = 0;
 		zst.total_out = 0;
-		rs = deflate(&zst, Z_SYNC_FLUSH);
+		rs = deflate(&zst, Z_NO_FLUSH);
+		if (rs != Z_OK || zst.avail_in != 0)
+		{
+			std::stringstream info;
+			if (zst.avail_in != 0)
+				info << strerror(errno);
+			else
+				info << _(" not all data was compressed");
+			LOG(ERROR) << "Compressor (" << self << "):"
+			           << _(" compression error.")
+			           << _(" Message: ") << info.str();
+			MSG_ERROR.Send(sock_out_);
+			break;
+		}
+		zst.avail_in = 0;
+		zst.avail_out = sizeof(self->buf_) - zst.total_out;
+		zst.next_in = NULL;
+		zst.next_out = (Bytef*)self->buf_ + zst.total_out;
+		rs = deflate(&zst, Z_FULL_FLUSH);
 		if (rs != Z_OK || zst.avail_in != 0)
 		{
 			std::stringstream info;
@@ -141,7 +160,7 @@ Compressor::Start(Compressor* self)
 	}
 	if (self->break_)
 		VLOG(2) << "Compressor (" << self << "): breaked.";
-	int rs = deflateEnd(&zst);
+	rs = deflateEnd(&zst);
 	VLOG_IF(2, rs != Z_DATA_ERROR && rs != Z_OK)
 		<< _("compressor cleaning error.") << _(" Code:") << rs;
 	zmq_close(sock_in_);

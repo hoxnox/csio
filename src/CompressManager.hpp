@@ -10,6 +10,7 @@
 #include <string>
 #include <csio.h>
 #include <zmq.h>
+#include <zlib.h>
 
 #include "ProcessManagerBase.hpp"
 #include "Config.hpp"
@@ -67,8 +68,10 @@ private:
 	int         processCompressorIncoming();
 	int         processWriterIncoming();
 	int         startNewMember();
-	Message     makeMemberHeaderTemplate(uint16_t chunks_count,
-	                                     std::string extra = "");
+	int         makeMemberHeaderTemplate(uint16_t chunks_count,
+	                                     char* buf, size_t bufsz,
+	                                     std::string extra = "",
+	                                     uint32_t mtime = 0);
 
 private:
 	void* zmq_ctx_;
@@ -84,10 +87,13 @@ private:
 	size_t       rdseq_;
 	const size_t CHUNKS_HIGH_WATERMARK;
 	int          pushing_semaphore_;
+	int          pushing_semaphore_min_;
 	size_t       ifsize_;
 	size_t       bytes_compressed_;
-	std::string  ifbasename_;
+	uint32_t     member_bytes_compressed_;
+	uint32_t     mtime_;
 	u32be        ifmtime_;
+	uLong        crc32_;
 
 	std::vector<uint16_t> member_chunks_cnt_;
 	std::vector<uint16_t>::const_iterator chunks_cnt_;
