@@ -24,7 +24,7 @@ ProcessManagerBase::signalError(int sig, siginfo_t *si, void *ptr)
 	int    TraceSize;
 	char** Messages;
 	std::stringstream msg;
-	msg << _("Received sigal: ") << strsignal(sig)
+	msg << _("ProcessManager: received sigal: ") << strsignal(sig)
 			<< " (" << si->si_addr << ")" << std::endl;
 #if __WORDSIZE == 64 // os type
 	ErrorAddr = (void*)((ucontext_t*)ptr)->uc_mcontext.gregs[REG_RIP];
@@ -61,7 +61,8 @@ void ProcessManagerBase::loop()
 	sfd = signalfd(-1, &sigset_, SFD_NONBLOCK);
 	if (sfd == -1)
 	{
-		LOG(ERROR)<<_("Error registering process. Can't get signalfd.");
+		LOG(ERROR)<<_("ProcessManager: error registering process."
+		              " Can't get signalfd.");
 		return;
 	}
 	for (;;)
@@ -83,7 +84,7 @@ void ProcessManagerBase::loop()
 		
 		if (rs == -1)
 		{
-			LOG(ERROR) << _("Error processing signals.")
+			LOG(ERROR) << _("ProcessManager: error signals wait.")
 			           << _(" Message: ") << strerror(errno);
 			Stop();
 			break;
@@ -95,7 +96,7 @@ void ProcessManagerBase::loop()
 		ssize_t s = read(sfd, &fdsi, sizeof(struct signalfd_siginfo));
 		if (s != sizeof(struct signalfd_siginfo))
 		{
-			LOG(ERROR) << _("Error processing signals.")
+			LOG(ERROR) << _("ProcessManager: error signals read.")
 			           << _(" Message: ") << strerror(errno);
 			Stop();
 			break;
@@ -105,16 +106,16 @@ void ProcessManagerBase::loop()
 			// TODO: renew config
 			continue;
 		} else {
-			LOG(INFO) << _("Received signal: ")
+			LOG(INFO) << _("ProcessManager: received signal: ")
 			          << strsignal(fdsi.ssi_signo)
 			          << _(" STOPPING");
 			Stop();
 			break;
 		}
 	}
-	VLOG(2) << _("Cleaning");
+	VLOG(2) << _("ProcessManager: cleaning.");
 	if(!doStop())
-		LOG(ERROR) << _("Cleaning process failed");
+		LOG(ERROR) << _("ProcessManager: cleaning process failed.");
 }
 
 void
@@ -127,15 +128,15 @@ ProcessManagerBase::Loop()
 		else if(state_ != STATE_NULL)
 			return;
 		setupSignals();
-		VLOG(2) << _("Initializing");
+		VLOG(2) << _("ProcessManager: initializing.");
 		if(!doStart())
 		{
-			LOG(ERROR) << _("Initializing process failed ");
+			LOG(ERROR) << _("ProcessManager: initializing failed.");
 			return;
 		}
 		state_ = STATE_RUNNING;
 	}
-	VLOG(2) << _("Starting main loop");
+	VLOG(2) << _("ProcessManager: starting main loop.");
 	loop();
 }
 
@@ -147,7 +148,7 @@ ProcessManagerBase::Stop()
 		return;
 	if(state_ == STATE_RUNNING)
 		state_ = STATE_NULL;
-	VLOG(2) << _("Stopping");
+	VLOG(2) << _("ProcessManager: stopping.");
 }
 
 } // namespace 

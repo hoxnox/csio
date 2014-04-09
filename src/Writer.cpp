@@ -101,8 +101,10 @@ Writer::Start(Writer* self, int ofd)
 		{
 			if (msg.DataSize() == 0)
 			{
-				VLOG(2) << "Writer: written " << msg.DataSize()
-				        << " bytes (seq " << msg.Num() << ")";
+#				ifndef NDEBUG
+				VLOG_D(2) << "Writer: written " << msg.DataSize()
+				          << " bytes (service info)";
+#				endif // DEBUG
 				continue;
 			}
 			if (self->lbufsz_ > CHUNKS_PER_MEMBER*2 - 2)
@@ -114,13 +116,10 @@ Writer::Start(Writer* self, int ofd)
 			uint16_t tmp(msg.DataSize());
 			memcpy(self->lbuf_ + self->lbufsz_, &tmp, 2);
 			self->lbufsz_ += 2;
-			VLOG(2) << "Writer: written " << msg.DataSize()
-			        << " bytes (seq " << msg.Num() << ")";
-		}
-		else
-		{
-			VLOG(2) << "Writer: written " << msg.DataSize()
-			        << " bytes (service info)";
+#			ifndef NDEBUG
+			VLOG_D(2) << "Writer: written " << msg.DataSize()
+			          << " bytes (seq " << msg.Num() << ")";
+#			endif // DEBUG
 		}
 	}
 	fclose(fstream);

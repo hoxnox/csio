@@ -26,19 +26,21 @@ Config::SetDefaults()
 inline std::string
 expand_path(const std::string path)
 {
-	std::string copy(path);
+	std::string result;
 	char * tmp = new char[4096];
 	if(tmp != NULL)
 	{
 		if(realpath(path.c_str(), tmp) == NULL)
 		{
-			LOG(ERROR) << _("Error resolving \"") << path << "\""
-			           << _("Message: ") << strerror(errno);
-			copy.assign(tmp);
+			LOG(ERROR) << _("Config: Error resolving path: ")
+			           << "\"" << path << "\""
+			           << _(" Message: ") << strerror(errno);
+			return result;
 		}
+		result.assign(tmp);
 		delete [] tmp;
 	}
-	return copy;
+	return result;
 }
 
 int
@@ -56,7 +58,7 @@ Config::ParseArgs(int argc, char* argv[])
 		{ "force", no_argument, NULL, 'f' },
 
 		{ "help", no_argument, NULL, 'h' },
-		{NULL, no_argument, NULL, '\0'}
+		{ NULL, no_argument, NULL, '\0'}
 	};
 
 	int i, opt = 0;
@@ -75,14 +77,16 @@ Config::ParseArgs(int argc, char* argv[])
 		}
 		opt = getopt_long( argc, argv, sopts, lopts, &i );
 	}
+	VLOG_IF(2, !opt_j.empty() && atoi(opt_j.c_str()) > 256)
+		<< _("Too many threads requested. Resetting to 256.");
 	if (!opt_j.empty()) compressors_count_ = 
 		atoi(opt_j.c_str()) < 256 ? atoi(opt_j.c_str()) : 256;
-	if (!opt_o.empty()) ofname_ = expand_path(opt_o);
+	if (!opt_o.empty()) ofname_ = opt_o;
 	if (verbose) verbose_ = true;
 	if (force) force_ = true;
 
 	if (optind < argc)
-		ifname_ = argv[optind++];
+		ifname_ = expand_path(argv[optind++]);
 	if (ofname_.empty())
 		ofname_ = ifname_ + ".dz";
 	return 1;
@@ -91,7 +95,7 @@ Config::ParseArgs(int argc, char* argv[])
 std::string
 Config::GetOptions() const
 {
-	return "Options:"
+	return "Options:\n"
 	       "	TODO: options desc";
 }
 

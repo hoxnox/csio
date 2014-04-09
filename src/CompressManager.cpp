@@ -80,7 +80,8 @@ CompressManager::CompressManager(const Config& cfg)
 {
 	if (!zmq_ctx_)
 	{
-		LOG(ERROR) << _("Error creating communication context.")
+		LOG(ERROR) << _("CompressManager: error creating communication"
+		                " context.")
 		           << _(" Message: ") << zmq_strerror(errno);
 		return;
 	}
@@ -123,7 +124,13 @@ CompressManager::makeInitialPush()
 	Message first_member_header((uint8_t*)msgbuf, rs, 0);
 	first_member_header.Send(sock_writer_);
 
-	char buf[CHUNK_SIZE*cfg_.CompressorsCount()];
+	char* buf = new char[CHUNK_SIZE*cfg_.CompressorsCount()];
+	if (buf == NULL)
+	{
+		LOG(ERROR) << _("CompressManager:  error initial reading.")
+		           << strerror(errno);
+		return -1;
+	}
 	memset(buf, 0, sizeof(buf));
 	rs = read(ifd_, buf, CHUNK_SIZE*cfg_.CompressorsCount());
 	if (rs == -1)
@@ -162,8 +169,10 @@ CompressManager::makeInitialPush()
 		++rdseq_;
 		--pushing_semaphore_min_;
 	}
+	delete [] buf;
 	bytes_compressed_ = rs;
-	VLOG(2) << _("Initial push with ") << rdseq_ << (" elements.");
+	VLOG(2) << _("CompressManager: initial push with ")
+	        << rdseq_ << (" elements.");
 	return 0;
 }
 
@@ -175,7 +184,8 @@ CompressManager::flushChunks()
 		if (chunks_.begin()->Send(sock_writer_, Message::BLOCKING_MODE)
 				< chunks_.begin()->DataSize())
 		{
-			VLOG(2) << _("Error sending message to the writer.")
+			VLOG(2) << _("CompressManager: srror sending message to"
+			             " the writer.")
 			        << _(" Message: ") << zmq_strerror(errno);
 			return -1;
 		}
@@ -213,7 +223,9 @@ CompressManager::processCompressorIncoming()
 		                " chunks to the writer");
 		return -1;
 	}
-	VLOG(2) << "SEMAPHORE: " << pushing_semaphore_;
+#		ifndef NDEBUG
+		VLOG(2) << "Semaphore state :" << pushing_semaphore_;
+#		endif // NDEBUG
 	if (bytes_compressed_ >= ifsize_)
 	{
 		if (pushing_semaphore_ == pushing_semaphore_min_)
@@ -226,6 +238,7 @@ CompressManager::processCompressorIncoming()
 			finish.Send(sock_writer_);
 			MSG_FILLN.Send(sock_writer_);
 			MSG_STOP.Send(sock_writer_);
+			VLOG(2) << _("CompressManager: compression finished.");
 			return -1;
 		}
 		MSG_STOP.Send(sock_jobs_);
@@ -552,8 +565,8 @@ CompressManager::waitThreadsReady(const size_t timeout_ms)
 bool
 CompressManager::doStart()
 {
-	VLOG(2) << "CompressManger: starting."
-	        << " Options: " << cfg_.GetOptions();
+	VLOG(2) << "CompressManager: starting."
+	        << cfg_.GetOptions();
 	if (createSocks() == -1)
 	{
 		LOG(ERROR) << _("Error creating inter-thread communications.")
@@ -575,8 +588,8 @@ CompressManager::doStart()
 	}
 	if (!waitThreadsReady(10*TICK))
 	{
-		LOG(ERROR) << _("Some threads wasn't ready in given timeout.")
-		           << _(" Use verbose for more info.");
+		LOG(ERROR) << _("CompressManager: Some threads wasn't ready in"
+		                " the given timeout.");
 		doStop();
 		return false;
 	}
@@ -588,7 +601,7 @@ CompressManager::doStart()
 bool
 CompressManager::doStop()
 {
-	VLOG(2) << "CompressManger: stopping.";
+	VLOG(2) << _("CompressManger: stopping.");
 	stop_ = true;
 	MSG_STOP.Send(sock_writer_);
 	for(size_t i = 0; i < compressors_instances_.size(); ++i)
