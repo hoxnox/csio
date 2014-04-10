@@ -19,7 +19,7 @@ namespace csio {
 #endif
 
 void*
-Compressor::Start(Compressor* self)
+Compressor::Start(Compressor* self, int level)
 {
 	self->break_ = false;
 	int hwm = self->cfg_.MsgHWM();
@@ -49,7 +49,7 @@ Compressor::Start(Compressor* self)
 	zst.total_out = 0;
 	zst.next_in   = NULL;
 	zst.next_out  = NULL;
-	int rs = deflateInit2(&zst, 9, Z_DEFLATED, -MAX_WBITS, DEF_MEM_LEVEL, 0);
+	int rs = deflateInit2(&zst, level, Z_DEFLATED, -MAX_WBITS, DEF_MEM_LEVEL, 0);
 	if (rs != Z_OK)
 	{
 		LOG(ERROR) << "Compressor (" << self << "):"

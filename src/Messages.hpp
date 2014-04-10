@@ -65,7 +65,6 @@ protected:
 const Message MSG_READY("READY");
 const Message MSG_ERROR("ERROR");
 const Message MSG_STOP("STOP");
-const Message MSG_BREAK("BREAK");
 const Message MSG_FILLN("FILLN");
 
 

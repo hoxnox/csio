@@ -19,7 +19,7 @@ public:
 	{
 	}
 
-	static void* Start(Compressor* self);
+	static void* Start(Compressor* self, int level);
 	void Break() { break_ = true; }
 private:
 	int compress(char* data, size_t datasz);

@@ -24,7 +24,7 @@ public:
 	void        PrintHelp() const;
 
 	bool        Force()            const { return force_; }
-	int         Verbose()          const { return verbose_; }
+	bool        Verbose()          const { return verbose_; }
 	std::string IFName()           const { return ifname_; }
 	std::string OFName()           const { return ofname_; }
 	int         CompressionLevel() const { return compression_level_; }
@@ -33,7 +33,7 @@ public:
 
 private:
 	bool        force_;
-	int         verbose_;
+	bool        verbose_;
 	std::string ifname_;
 	std::string ofname_;
 	int         compression_level_;
