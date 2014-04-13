@@ -6,6 +6,7 @@
 
 #include <cstdio>
 #include "Utils.hpp"
+#include "Messages.hpp"
 
 namespace csio {
 
@@ -14,25 +15,26 @@ class Writer
 public:
 	Writer(void* zmq_ctx, int hwm)
 		: zmq_ctx_(zmq_ctx)
-		, break_(false)
-		, hwm_(hwm)
-		, header_pos_(0)
+		, fstream_(NULL)
+		, chunks_lengths_off_(0)
 	{
+		sock_ = createConnectSock(
+			zmq_ctx_, "inproc://writer", ZMQ_PAIR, hwm);
 	}
 
 	static void* Start(Writer* self, int out_file_descriptor);
-	void Break() { break_ = true; };
 private:
+	bool processMessage(const Message& msg);
 	Writer() = delete;
 	Writer(const Writer&) = delete;
 	Writer& operator=(const Writer&) = delete;
-	void*  zmq_ctx_;
-	bool   break_;
-	int    hwm_;
-	off_t  header_pos_;
-	size_t bytes_written_;
-	char   lbuf_[CHUNKS_PER_MEMBER*2];
-	size_t lbufsz_;
+	void*   zmq_ctx_;
+	FILE*   fstream_;
+	void*   sock_;
+	off_t   chunks_lengths_off_;
+	bool    break_ = false;
+	uint8_t lbuf_[CHUNKS_PER_MEMBER*2];
+	size_t  lbufsz_;
 };
 
 } // namespace

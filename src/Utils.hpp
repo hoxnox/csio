@@ -80,17 +80,23 @@ createConnectSock(void* ctx, std::string path, int type, int hwm = 50)
 	return sock;
 }
 
-const size_t TICK  = 10;
-/**@brief maximum chunks count in the member
- *
- * This value limited by XLEN (see file structure). This value is two
- * byte long. So maximum 0xffff. We need to subfield header 'RA'+length
- * bytes, 2 bytes for version, 2 bytes for chunk size and 2 bytes for
- * chunks count. left bytes can be used to write chunk's lengths.*/
-const size_t CHUNKS_PER_MEMBER = (0xffff - (2 + 2) - (2 + 2 + 2)) / 2;
-const size_t MEMBER_HEADER_MINSZ = 10 + (2 + (2 + 2 + (2 + 2 + 2)));
-const char   Z_FINISH_TEMPLATE[] = {0x03, 0x00};
+template<typename T> inline void
+add_to_buf(uint8_t*& buf, T val)
+{
+	memcpy(buf, &val, sizeof(T));
+	buf += sizeof(T);
+}
 
+inline void
+add_to_buf(uint8_t*& buf, const void* val, size_t valsz)
+{
+	if(!val || valsz == 0)
+		return;
+	memcpy(buf, val, valsz);
+	buf += valsz;
+}
+
+static const size_t TICK  = 10;
 
 } // namespace
 

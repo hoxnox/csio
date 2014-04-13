@@ -24,10 +24,10 @@ Compressor::Start(Compressor* self, int level)
 	self->break_ = false;
 	int hwm = self->cfg_.MsgHWM();
 	void* sock_in_  =
-		createConnectSock(self->zmq_ctx_, "inproc://jobs", ZMQ_PULL,
+		createConnectSock(self->zmq_ctx_, "inproc://outbox", ZMQ_PULL,
 				hwm);
 	void* sock_out_ =
-		createConnectSock(self->zmq_ctx_, "inproc://feedback", ZMQ_PUSH,
+		createConnectSock(self->zmq_ctx_, "inproc://inbox", ZMQ_PUSH,
 				hwm);
 	VLOG_IF(2, !sock_in_) << "Compressor (" << self << "):"
 	                      <<_(" error with input socket.");
@@ -150,7 +150,7 @@ Compressor::Start(Compressor* self, int level)
 			MSG_ERROR.Send(sock_out_);
 			break;
 		}
-		if (result.Send(sock_out_) < result.DataSize())
+		if (!result.Send(sock_out_))
 		{
 			VLOG(2) << "Compressor (" << self << "):"
 			        << _(" failed send file chunk.");

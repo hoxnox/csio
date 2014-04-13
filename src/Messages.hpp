@@ -5,6 +5,7 @@
 #define __MESSAGES_HPP__
 
 #include <zmq.h>
+#include <zlib.h>
 #include <stdint.h>
 #include <string>
 #include <endians.hpp>
@@ -19,53 +20,61 @@ class Message
 public:
 	enum MessageType :uint8_t
 	{
-		TYPE_INFO              = 1,
-		TYPE_FCHUNK            = 2,
-		TYPE_UNKNOWN           = 0
+		TYPE_INFO    = 1,
+		TYPE_FCHUNK  = 2,
+		TYPE_MCLOSE  = 3,
+		TYPE_MHEADER = 4,
+		TYPE_UNKNOWN = 0
 	};
-	static const bool BLOCKING_MODE;
+
+	enum SendMode :bool
+	{
+		BLOCKING_MODE    = true,
+		NONBLOCKING_MODE = false
+	};
+
+	static const off_t CHUNKS_LENGTHS_HEADER_OFFSET;
 
 	Message() : datasz_(0) { }
-	Message(void* sock, bool blocking = false);
-	Message(const uint8_t* data, size_t datasz, uint16_t num);
+	Message(void* sock, SendMode mode = BLOCKING_MODE);
+	Message(const uint8_t* data, size_t datasz, u16le num);
 	Message(const std::string& msg);
+	Message(u32le fsize, u32le crc);
+	Message(u16le       chunks_count,
+	        char        cmpr_level,
+	        std::string fname = "",
+	        u32le       mtime = 0);
 	Message(const Message& msg) { operator=(msg); }
-
-	virtual ~Message() { Clear(); }
+	~Message() { Clear(); }
 
 	void        Clear();
-	MessageType Type();
-	int         Send(void* sock, bool blocking = false) const;
-	void        Fetch(void* zmq_sock, bool blocking = false);
+	MessageType Type() const;
+	bool        Send (void* sock, SendMode mode = NONBLOCKING_MODE) const;
+	void        Fetch(void* zmq_sock, SendMode blocking = NONBLOCKING_MODE);
 
 	uint8_t*    Data() const;
 	size_t      DataSize() const;
 	uint16_t    Num() const;
 	std::string What() const;
 
-	bool operator==(const Message& rhv) const;
-	bool operator<(const Message& rhv) const
-	{
-		if(Num() < rhv.Num())
-			return true;
-		return false;
-	}
-	Message& operator=(const Message& copy)
-	{
-		datasz_ = copy.datasz_;
-		data_.reset(new uint8_t[datasz_]);
-		memcpy(data_.get(), copy.data_.get(), datasz_);
-	}
+	bool     operator==(const Message& rhv) const;
+	bool     operator<(const Message& rhv) const;
+	Message& operator=(const Message& copy);
 
 protected:
-	size_t   datasz_;
+	size_t                     datasz_;
 	std::unique_ptr<uint8_t[]> data_;
+
+	static uint8_t             FLG;
+	static uint8_t             XFL;
+	static const uint8_t       OS;
+	static const size_t        GZIP_HEADER_SIZE;
+	static const u16le         RA_EXT_HEADER_SIZE;
 };
 
 const Message MSG_READY("READY");
 const Message MSG_ERROR("ERROR");
 const Message MSG_STOP("STOP");
-const Message MSG_FILLN("FILLN");
 
 
 ////////////////////////////////////////////////////////////////////////
@@ -75,12 +84,12 @@ inline void
 Message::Clear()
 {
 	if(data_)
-		data_.reset(NULL);
+		data_.reset();
 	datasz_ = 0;
 }
 
 inline Message::MessageType
-Message::Type()
+Message::Type() const
 {
 	return data_ && datasz_ > 0 ? (Message::MessageType)data_[0] : TYPE_UNKNOWN;
 };
@@ -102,13 +111,13 @@ Message::DataSize() const
 inline uint16_t
 Message::Num() const
 {
-	u16be num_ = 0;
+	u16le num = 0;
 	if(data_ && datasz_ > 2)
 	{
-		num_.bytes[0] = data_[1];
-		num_.bytes[1] = data_[2];
+		num.bytes[0] = data_[1];
+		num.bytes[1] = data_[2];
 	}
-	return num_;
+	return num;
 }
 
 inline std::string
@@ -132,6 +141,22 @@ Message::operator==(const Message& rhv) const
 	if (std::equal(lhv_data, lhv_data + datasz_, rhv_data))
 		return true;
 	return false;
+}
+
+inline bool
+Message::operator<(const Message& rhv) const
+{
+	if(Num() < rhv.Num())
+		return true;
+	return false;
+}
+
+inline Message&
+Message::operator=(const Message& copy)
+{
+	datasz_ = copy.datasz_;
+	data_.reset(new uint8_t[datasz_]);
+	memcpy(data_.get(), copy.data_.get(), datasz_);
 }
 
 } // namespace
