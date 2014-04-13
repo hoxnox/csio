@@ -19,9 +19,9 @@ if(NOT DEFINED Glog_ROOT)
 	set(Glog_ROOT /usr /usr/local $ENV{Glog_ROOT})
 endif(NOT DEFINED Glog_ROOT)
 
-find_path(Glog_INCLUDE_DIR logging.h
+find_path(Glog_INCLUDE_DIR glog/logging.h
 	PATHS ${Glog_ROOT}
-	PATH_SUFFIXES glog glog/include include
+	PATH_SUFFIXES include
 )
 
 if( Glog_USE_STATIC_LIBS )

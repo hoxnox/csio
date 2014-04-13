@@ -86,7 +86,7 @@ CompressManager::makeInitialPush()
 		}
 		ifs_.cur_crc32 = crc32(ifs_.cur_crc32, 
 		                       (Bytef*)rdbuf.get() + ifs_.bytes_rx,
-		                       ifs_.chunksz);
+		                       chunksz);
 		ifs_.bytes_rx += chunksz;
 		ifs_.cur_bytes_rx += chunksz;
 		++ifs_.chunks_rx;
@@ -424,8 +424,8 @@ CompressManager::openFiles()
 bool
 CompressManager::waitChildrenReady(const size_t timeout_ms)
 {
-	std::chrono::time_point<std::chrono::steady_clock> deadline
-		= std::chrono::steady_clock::now()
+	std::chrono::time_point<std::chrono::system_clock> deadline
+		= std::chrono::system_clock::now()
 			+ std::chrono::milliseconds(timeout_ms);
 	zmq_pollitem_t poll_items[2] = {
 		{sock_inbox_,  0, ZMQ_POLLIN, 0},
@@ -433,7 +433,7 @@ CompressManager::waitChildrenReady(const size_t timeout_ms)
 	};
 	size_t compressors_ready = 0;
 	bool writer_ready = false;
-	while(deadline > std::chrono::steady_clock::now())
+	while(deadline > std::chrono::system_clock::now())
 	{
 		int rs = zmq_poll(poll_items, 2, TICK);
 		VLOG_IF(2, rs == -1)

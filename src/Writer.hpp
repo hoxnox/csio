@@ -17,6 +17,7 @@ public:
 		: zmq_ctx_(zmq_ctx)
 		, fstream_(NULL)
 		, chunks_lengths_off_(0)
+		, break_(false)
 	{
 		sock_ = createConnectSock(
 			zmq_ctx_, "inproc://writer", ZMQ_PAIR, hwm);
@@ -32,7 +33,7 @@ private:
 	FILE*   fstream_;
 	void*   sock_;
 	off_t   chunks_lengths_off_;
-	bool    break_ = false;
+	bool    break_;
 	uint8_t lbuf_[CHUNKS_PER_MEMBER*2];
 	size_t  lbufsz_;
 };

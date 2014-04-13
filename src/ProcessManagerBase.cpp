@@ -4,9 +4,9 @@
 #include "ProcessManagerBase.hpp"
 #include <sstream>
 #include <iostream>
-#include <glog/logging.h>
 #include <sys/signalfd.h>
 #include <sys/select.h>
+#include "logging.hpp"
 
 namespace csio {
 
