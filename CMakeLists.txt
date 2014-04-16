@@ -1,5 +1,5 @@
-# @author $username$ <$usermail$>
-# @date $date$
+# @author Merder Kim <hoxnox@gmail.com>
+# @date 20140221 15:40:20
 # csio cmake build script
 
 cmake_minimum_required(VERSION 2.6.4)
@@ -11,6 +11,7 @@ option(WITH_TESTS "Build tests."  OFF)
 option(WITH_DOCS  "Generate docs." OFF)
 option(WITH_SHARED_LIBS "Build shared libraries." OFF)
 option(WITH_STATIC_LIBS "Build static libraries." ON)
+option(WITH_dzip        "Build dzip compress utility" ON)
 option(CSIO_FORCE_SHARED_CRT
 	"Use shared run-time lib even when csio is built as static lib." OFF)
 
@@ -28,9 +29,10 @@ set(csio_VERSION_MINOR 0)
 set(csio_VERSION_PATCH 1)
 # configuration header
 set(TEST_SAMPLES_DIR "${PROJECT_SOURCE_DIR}/test/samples/")
+set(TEST_TMP_DIR "/tmp")
 configure_file(
 	"${PROJECT_SOURCE_DIR}/src/csio_config.cfg"
-	"${PROJECT_SOURCE_DIR}/src/csio_config.h"
+	"${PROJECT_SOURCE_DIR}/include/csio_config.h"
 	ESCAPE_QUOTES
 )
 
@@ -40,7 +42,7 @@ set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}"
 include_directories("${PROJECT_SOURCE_DIR}/src"
                     "${PROJECT_SOURCE_DIR}/include")
 
-###########################################################################
+########################################################################
 # zlib
 
 find_package(ZLIB REQUIRED)
@@ -48,11 +50,48 @@ include_directories(${ZLIB_INCLUDE_DIRS})
 list(APPEND LIBRARIES ${ZLIB_LIBRARIES})
 
 ########################################################################
+# dzip
+
+if(WITH_dzip)
+	set(ZMQ_USE_STATIC_LIBS true)
+	find_package(ZMQ REQUIRED)
+	set(Glog_USE_STATIC_LIBS true)
+	find_package(Glog REQUIRED)
+	include_directories(${ZMQ_INCLUDE_DIR})
+	include_directories(${Glog_INCLUDE_DIR})
+	list(APPEND LIBRARIES ${ZMQ_LIBRARIES} ${Glog_LIBRARIES} pthread rt)
+	find_package(Threads REQUIRED)
+	if (NOT CMAKE_USE_PTHREADS_INIT)
+		message(FATAL_ERROR "dzip utility needs pthreads")
+	endif()
+	add_library(dzip_internal STATIC 
+		./src/ProcessManagerBase.hpp
+		./src/ProcessManagerBase.cpp
+		./src/Messages.hpp
+		./src/Messages.cpp
+		./src/CompressManager.hpp
+		./src/CompressManager.cpp
+		./src/Writer.hpp
+		./src/Writer.cpp
+		./src/Config.hpp
+		./src/Config.cpp
+		./src/Compressor.hpp
+		./src/Compressor.cpp
+	)
+	list(APPEND LIBRARIES dzip_internal)
+	set(DZIP_SRC ./src/dzip.cpp)
+	add_executable(dzip ${DZIP_SRC})
+	target_link_libraries(dzip_internal ${LIBRARIES})
+	target_link_libraries(dzip ${LIBRARIES})
+	set_target_properties(dzip PROPERTIES COMPILE_FLAGS "-std=c++0x")
+	set_target_properties(dzip_internal PROPERTIES COMPILE_FLAGS "-std=c++0x")
+endif()
+
+########################################################################
 # csio
 
-set(CSIO_SRC include/csio.h
-             src/csio.c)
-nx_add_library(csio ${CSIO_FORCE_SHARED_CRT} ${WITH_STATIC_LIBS} 
+set(CSIO_SRC include/csio.h src/csio.c)
+nx_add_library(csio ${CSIO_FORCE_SHARED_CRT} ${WITH_STATIC_LIBS}
 	${WITH_SHARED_LIBS} "CSIO_SHARED"
 	"${csio_VERSION_MAJOR}-${csio_VERSION_MINOR}-${csio_VERSION_PATCH}"
 	"${CSIO_SRC}")
@@ -82,15 +121,14 @@ if(WITH_TESTS)
 	set(SOURCES_TEST
 		./test/test.cpp
 		./test/tcsio_none.hpp
-		./test/tcsio_dictzip.hpp)
+		./test/tcsio_dictzip.hpp
+	)
 	enable_testing()
 	find_package(GTest REQUIRED)
 	include_directories(${GTEST_INCLUDE_DIRS})
 	set(TEST test_${PROJECT_NAME})
 	add_executable(${TEST} ${SOURCES_TEST})
-	if(NOT WIN32)
-		list(APPEND LIBRARIES pthread)
-	endif(NOT WIN32)
+	set_target_properties(${TEST} PROPERTIES COMPILE_FLAGS "-std=c++0x")
 	target_link_libraries("${TEST}" ${GTEST_LIBRARIES} ${LIBRARIES})
 	nx_GTEST_ADD_TESTS("${TEST}" ${SOURCES_TEST})
 endif()

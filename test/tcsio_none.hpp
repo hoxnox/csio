@@ -1,5 +1,5 @@
-/**@author $username$ <$usermail$>
- * @date $date$ */
+/**@author hoxnox <hoxnox@gmail.com>
+ * @date 20131217 15:33:12 */
 
 #ifndef __TCSIO_NONE_HPP__
 #define __TCSIO_NONE_HPP__
@@ -36,6 +36,11 @@ protected:
 	CFILE* csample;
 };
 
+TEST_F(TestCSIONone, additional_fields)
+{
+	ASSERT_EQ(csample->size, 256);
+}
+
 TEST_F(TestCSIONone, get_compression)
 {
 	ASSERT_EQ(get_compression(sample), NONE);
@@ -57,12 +62,16 @@ TEST_F(TestCSIONone, cfread )
 	ASSERT_EQ(buf[256-1] , 0);
 	ASSERT_EQ(buf[256] , 1);
 	ASSERT_EQ(cfeof(csample) , 1);
+	ASSERT_EQ(cfgetc(csample), EOF);
 }
 
 TEST_F(TestCSIONone, cfgetc )
 {
 	for(size_t i = 0; i < 256; ++i)
+	{
 		ASSERT_EQ(cfgetc(csample), 0) << i;
+		ASSERT_EQ(cfeof(csample) , 0);
+	}
 	ASSERT_EQ(cfgetc(csample), EOF);
 	ASSERT_EQ(cfeof(csample) , 1);
 }
@@ -110,6 +119,14 @@ TEST_F(TestCSIONone, cferror)
 	ASSERT_EQ(cferror(cfile), 0);
 	cfclose(&cfile);
 	ASSERT_NE(cferror(cfile), 0);
+}
+
+TEST_F(TestCSIONone, FILE_is_opened_on_cfclose)
+{
+	ASSERT_NE(cfgetc(csample), EOF);
+	cfclose(&csample);
+	ASSERT_NE(fgetc(sample), EOF);
+	ASSERT_TRUE(csample == NULL);
 }
 
 #endif // __TCSIO_NONE_HPP__

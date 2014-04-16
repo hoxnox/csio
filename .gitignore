@@ -1,3 +1,4 @@
 *.swp
 build
-src/csio_config.h
+trash
+include/csio_config.h
