@@ -31,11 +31,11 @@ size_t skip_cstr(FILE* strm)
 CompressionMethod
 get_compression(FILE* stream)
 {
+	char buf[3];
 	off_t currpos = ftello(stream);
 	CompressionMethod result = NONE;
 	if (currpos == -1)
 		return result;
-	char buf[3];
 	if (fread((void*)buf, 1, 3, stream) != 3)
 		result = NONE;
 	else if (memcmp(buf, GZIP_DEFLATE_ID, 3) == 0)
@@ -118,7 +118,7 @@ get_gzip_header(FILE* stream, GZIPHeader* hdr)
 					{ errno = EILSEQ; return -1; }
 				if (fread((void*)xhdr, 1, 6, stream) != 6)
 					return -1;
-				if (*(uint16_t*)xhdr != 1)
+				if (xhdr[0] != 1 || xhdr[1] != 0) // ver [x01 x00]
 					{ errno = ENOSYS; return -1; }
 				hdr->chlen = *(uint16_t*)&xhdr[2];
 				if (*(uint16_t*)&xhdr[4]*2 > subdataln-2*3)

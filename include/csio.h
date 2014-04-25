@@ -86,7 +86,7 @@ static const char FHCRC     = 1 << 1;
 static const char FEXTRA    = 1 << 2;
 static const char FNAME     = 1 << 3;
 static const char FCOMMENT  = 1 << 4;
-static const char FRESERVED = 0xfe;
+static const char FRESERVED = (char)0xfe;
 static const char OS_CODE_UNIX = 3;
 
 #define CHUNK_SIZE 58315
