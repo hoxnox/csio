@@ -492,10 +492,10 @@ cfclose(CFILE** cstream)
 int
 cfeof(CFILE* cstream)
 {
-	if (cferror(cstream))
-		return 1;
 	if (cstream->compression == NONE)
 		return feof(cstream->stream);
+	if (cferror(cstream))
+		return 1;
 	else if (cstream->compression == DICTZIP)
 		return cstream->eof;
 	return 1;
@@ -553,10 +553,10 @@ cftell(CFILE* stream)
 off_t
 cftello(CFILE* stream)
 {
-	if (cferror(stream))
-		return -1;
 	if (stream->compression == NONE)
 		return ftello(stream->stream);
+	if (cferror(stream))
+		return -1;
 	else if (stream->compression == DICTZIP)
 		return stream->currpos;
 	errno = EINVAL;
@@ -626,17 +626,17 @@ cfread(void* dest, size_t size, size_t count, CFILE* stream)
 int
 cfgetc(CFILE* stream)
 {
-	if (cferror(stream))
-	{
-		errno = EINVAL;
-		return EOF;
-	}
 	if (stream->compression == NONE)
 	{
 		return fgetc(stream->stream);
 	}
 	else if (stream->compression == DICTZIP)
 	{
+		if (cferror(stream))
+		{
+			errno = EINVAL;
+			return EOF;
+		}
 		if (stream->currpos == stream->size)
 		{
 			stream->eof = 1;

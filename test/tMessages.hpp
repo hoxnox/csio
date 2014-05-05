@@ -72,7 +72,7 @@ TEST_F(TestMessages, BigMsg)
 	ASSERT_EQ(msg.DataSize(), sizeof(bigbuf));
 	ASSERT_TRUE(std::equal(dt, dt + msg.DataSize(), bigbuf));
 	ASSERT_EQ(msg.Num(), 5);
-	ASSERT_EQ(msg.Send(sock_out), sizeof(bigbuf) + 1 + 2) << zmq_strerror(errno);
+	ASSERT_EQ(msg.Send(sock_out), true) << zmq_strerror(errno);
 	Message msg_(sock_in);
 	ASSERT_EQ(msg_.Type(), Message::TYPE_FCHUNK);
 	dt = msg_.Data();
@@ -89,7 +89,7 @@ TEST_F(TestMessages, MsgFChunk)
 	ASSERT_EQ(msg.DataSize(), datasz);
 	ASSERT_TRUE(std::equal(dt, dt + msg.DataSize(), data));
 	ASSERT_EQ(msg.Num(), 100);
-	ASSERT_EQ(msg.Send(sock_out), data_s.length() + 1 + 2) << zmq_strerror(errno);
+	ASSERT_EQ(msg.Send(sock_out), true) << zmq_strerror(errno);
 	Message msg_(sock_in);
 	ASSERT_EQ(msg_.Type(), Message::TYPE_FCHUNK);
 	dt = msg_.Data();
@@ -103,7 +103,7 @@ TEST_F(TestMessages, MsgInfo)
 	Message msg(data_s);
 	ASSERT_EQ(msg.Type(), Message::TYPE_INFO);
 	ASSERT_EQ(msg.What(), std::string((const char*)data, datasz));
-	ASSERT_EQ(msg.Send(sock_out), data_s.length() + 1) << zmq_strerror(errno);
+	ASSERT_EQ(msg.Send(sock_out), true) << zmq_strerror(errno);
 	Message msg_(sock_in);
 	ASSERT_EQ(msg_.Type(), Message::TYPE_INFO);
 	ASSERT_EQ(msg_.What(), std::string((const char*)data, datasz));
