@@ -583,7 +583,12 @@ cfread(void* dest, size_t size, size_t count, CFILE* stream)
 		}
 		off_t pos = stream->currpos;
 		off_t end = pos + size*count;
-		end = end < stream->size ? end : stream->size;
+		int need_to_set_eof = 0;
+		if (end > stream->size)
+		{
+			need_to_set_eof = 1;
+			end = stream->size;
+		}
 		size_t copied = 0;
 		while (pos < end)
 		{
@@ -603,6 +608,8 @@ cfread(void* dest, size_t size, size_t count, CFILE* stream)
 			copied += copyend - pos;
 			pos = copyend;
 		}
+		if (need_to_set_eof)
+			stream->eof = 1;
 		stream->currpos = pos;
 		return copied;
 	}
