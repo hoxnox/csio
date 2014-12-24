@@ -611,7 +611,7 @@ cfread(void* dest, size_t size, size_t count, CFILE* stream)
 		if (need_to_set_eof)
 			stream->eof = 1;
 		stream->currpos = pos;
-		return copied;
+		return copied/size;
 	}
 	else if (stream->compression == NONE)
 	{
