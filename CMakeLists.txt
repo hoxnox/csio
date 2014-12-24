@@ -128,9 +128,13 @@ if(WITH_TESTS)
 	include_directories(${GTEST_INCLUDE_DIRS})
 	set(TEST test_${PROJECT_NAME})
 	add_executable(${TEST} ${SOURCES_TEST})
+	add_executable(access_speed_test ./test/access_speed_test.c)
+	set_target_properties(access_speed_test PROPERTIES COMPILE_FLAGS "-std=c1x")
+	target_link_libraries(access_speed_test ${LIBRARIES})
 	set_target_properties(${TEST} PROPERTIES COMPILE_FLAGS "-std=c++0x")
 	target_link_libraries("${TEST}" ${GTEST_LIBRARIES} ${LIBRARIES})
 	nx_GTEST_ADD_TESTS("${TEST}" ${SOURCES_TEST})
+
 endif()
 
 ########################################################################
