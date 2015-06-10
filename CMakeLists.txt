@@ -78,11 +78,9 @@ if(WITH_dzip)
 		./src/Compressor.hpp
 		./src/Compressor.cpp
 	)
-	list(APPEND LIBRARIES dzip_internal)
 	set(DZIP_SRC ./src/dzip.cpp)
 	add_executable(dzip ${DZIP_SRC})
-	target_link_libraries(dzip_internal ${LIBRARIES})
-	target_link_libraries(dzip ${LIBRARIES})
+	target_link_libraries(dzip dzip_internal ${LIBRARIES})
 	set_target_properties(dzip PROPERTIES COMPILE_FLAGS "-std=c++0x")
 	set_target_properties(dzip_internal PROPERTIES COMPILE_FLAGS "-std=c++0x")
 endif()
