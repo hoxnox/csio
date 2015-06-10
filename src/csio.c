@@ -5,19 +5,6 @@
 #include <errno.h>
 #include <zlib.h>
 
-static const char GZIP_DEFLATE_ID[3] = {0x1f, 0x8b, 0x08};
-static const char FTEXT     = 1;
-static const char FHCRC     = 1 << 1;
-static const char FEXTRA    = 1 << 2;
-static const char FNAME     = 1 << 3;
-static const char FCOMMENT  = 1 << 4;
-static const char FRESERVED = 0xfe;
-static const char OS_CODE_UNIX = 3;
-
-static const uint16_t CHUNK_SIZE = 58315;
-static const size_t   EMPTY_FINISH_BLOCK_LEN = 2;
-static const size_t   GZIP_CRC32_LEN = 4;
-
 /**@brief stdio fopen analogue
  *
  * If the file is compressed with supported format, the library will
@@ -44,11 +31,11 @@ size_t skip_cstr(FILE* strm)
 CompressionMethod
 get_compression(FILE* stream)
 {
+	char buf[3];
 	off_t currpos = ftello(stream);
 	CompressionMethod result = NONE;
 	if (currpos == -1)
 		return result;
-	char buf[3];
 	if (fread((void*)buf, 1, 3, stream) != 3)
 		result = NONE;
 	else if (memcmp(buf, GZIP_DEFLATE_ID, 3) == 0)
@@ -131,7 +118,7 @@ get_gzip_header(FILE* stream, GZIPHeader* hdr)
 					{ errno = EILSEQ; return -1; }
 				if (fread((void*)xhdr, 1, 6, stream) != 6)
 					return -1;
-				if (*(uint16_t*)xhdr != 1)
+				if (xhdr[0] != 1 || xhdr[1] != 0) // ver [x01 x00]
 					{ errno = ENOSYS; return -1; }
 				hdr->chlen = *(uint16_t*)&xhdr[2];
 				if (*(uint16_t*)&xhdr[4]*2 > subdataln-2*3)
@@ -505,10 +492,10 @@ cfclose(CFILE** cstream)
 int
 cfeof(CFILE* cstream)
 {
-	if (cferror(cstream))
-		return 1;
 	if (cstream->compression == NONE)
 		return feof(cstream->stream);
+	if (cferror(cstream))
+		return 1;
 	else if (cstream->compression == DICTZIP)
 		return cstream->eof;
 	return 1;
@@ -566,10 +553,10 @@ cftell(CFILE* stream)
 off_t
 cftello(CFILE* stream)
 {
-	if (cferror(stream))
-		return -1;
 	if (stream->compression == NONE)
 		return ftello(stream->stream);
+	if (cferror(stream))
+		return -1;
 	else if (stream->compression == DICTZIP)
 		return stream->currpos;
 	errno = EINVAL;
@@ -596,7 +583,12 @@ cfread(void* dest, size_t size, size_t count, CFILE* stream)
 		}
 		off_t pos = stream->currpos;
 		off_t end = pos + size*count;
-		end = end < stream->size ? end : stream->size;
+		int need_to_set_eof = 0;
+		if (end > stream->size)
+		{
+			need_to_set_eof = 1;
+			end = stream->size;
+		}
 		size_t copied = 0;
 		while (pos < end)
 		{
@@ -616,8 +608,10 @@ cfread(void* dest, size_t size, size_t count, CFILE* stream)
 			copied += copyend - pos;
 			pos = copyend;
 		}
+		if (need_to_set_eof)
+			stream->eof = 1;
 		stream->currpos = pos;
-		return copied;
+		return copied/size;
 	}
 	else if (stream->compression == NONE)
 	{
@@ -639,17 +633,17 @@ cfread(void* dest, size_t size, size_t count, CFILE* stream)
 int
 cfgetc(CFILE* stream)
 {
-	if (cferror(stream))
-	{
-		errno = EINVAL;
-		return EOF;
-	}
 	if (stream->compression == NONE)
 	{
 		return fgetc(stream->stream);
 	}
 	else if (stream->compression == DICTZIP)
 	{
+		if (cferror(stream))
+		{
+			errno = EINVAL;
+			return EOF;
+		}
 		if (stream->currpos == stream->size)
 		{
 			stream->eof = 1;

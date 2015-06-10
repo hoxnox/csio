@@ -1,5 +1,5 @@
-/**@author $username$ <$usermail$>
- * @date $date$
+/**@author Merder Kim <hoxnox@gmail.com>
+ * @date 20140324 20:20:30
  *
  * @brief csio test launcher.*/
 
@@ -7,6 +7,8 @@
 #include <gtest/gtest.h>
 #include "tcsio_none.hpp"
 #include "tcsio_dictzip.hpp"
+#include "tzmq.hpp"
+#include "tMessages.hpp"
 
 // test cases
 

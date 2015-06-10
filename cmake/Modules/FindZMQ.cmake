@@ -1,0 +1,52 @@
+# Find Snappy
+# Merder Kim <hoxnox@gmail.com>
+# 
+# input:
+#  ZMQ_ROOT
+#  ZMQ_USE_STATIC_LIBS
+#
+# output:
+#  ZMQ_FOUND
+#  ZMQ_INCLUDE_DIR
+#  ZMQ_LIBRARIES
+#
+
+if(ZMQ_INCLUDE_DIR AND ZMQ_LIBRARIES)
+	set(ZMQ_FIND_QUITELY TRUE) # cached
+endif(ZMQ_INCLUDE_DIR AND ZMQ_LIBRARIES)
+
+if(NOT DEFINED ZMQ_ROOT)
+	set(ZMQ_ROOT /usr /usr/local $ENV{ZMQ_ROOT})
+endif(NOT DEFINED ZMQ_ROOT)
+
+find_path(ZMQ_INCLUDE_DIR zmq.h
+	PATHS ${ZMQ_ROOT}
+	PATH_SUFFIXES zmq/include include
+)
+
+if(ZMQ_USE_STATIC_LIBS)
+	set( _zmq_ORIG_CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
+	if(WIN32)
+		set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
+	else()
+		set(CMAKE_FIND_LIBRARY_SUFFIXES .a )
+	endif()
+endif()
+
+find_library(ZMQ_LIBRARIES
+	NAMES zmq
+	PATHS ${ZMQ_ROOT}
+	PATH_SUFFIXES lib
+)
+mark_as_advanced(ZMQ_INCLUDE_DIR ZMQ_LIBRARIES)
+
+# Restore the original find library ordering
+if( ZMQ_USE_STATIC_LIBS )
+	set(CMAKE_FIND_LIBRARY_SUFFIXES ${_zmq_ORIG_CMAKE_FIND_LIBRARY_SUFFIXES})
+endif()
+
+
+include("${CMAKE_ROOT}/Modules/FindPackageHandleStandardArgs.cmake")
+FIND_PACKAGE_HANDLE_STANDARD_ARGS(ZMQ DEFAULT_MSG ZMQ_INCLUDE_DIR ZMQ_LIBRARIES)
+
+

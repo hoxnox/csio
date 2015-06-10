@@ -150,7 +150,7 @@ TEST_F(TestCSIODictzip, cfread)
 	ASSERT_EQ(buf[BUFSZ - 1] , 0);
 	ASSERT_EQ(buf[BUFSZ] , 1);
 	ASSERT_EQ(cfread((void*)buf, 1, 1, csample), 0);
-	ASSERT_EQ(cfeof(csample), 0);
+	ASSERT_EQ(cfeof(csample), 1);
 	delete [] buf;
 }
 
