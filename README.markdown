@@ -1,4 +1,7 @@
-# CSIO is Compressed Stream Input Output library.
+# CSIO
+
+Compressed Stream Input Output library brings you random access through
+gzip file. And effective multithread gzip compressor.
 
 The main aim of the library - bring transparent stdio-like interface for
 compressed files. So you can open compressed file and use fseek, fread,
@@ -41,11 +44,11 @@ I used 3 files. Every file 1585741824 bytes (~1.5GB):
 
 ## Compression ratio
 
-Name|Uncompressed size | compressed dzip size and ratio | compressed gzip size and ratio
--|-|-|-
-bin|1585741824|1586476074(1.00046)|1585999044(1.00016)
-letter|1585741824|1192731126(0.75215)|1191369320(0.75130) 
-html|1585741824|376986553(0.23773)|344144149(0.21702)
+Name   | Uncompressed size | Compressed dzip size and ratio  | Compressed gzip size and ratio
+------ | ----------------- | ------------------------------- | ------------------------------
+bin    | 1585741824        | 1586476074(1.00046)             | 1585999044(1.00016)
+letter | 1585741824        | 1192731126(0.75215)             | 1191369320(0.75130) 
+html   | 1585741824        | 376986553(0.23773)              | 344144149(0.21702)
 
 As you can see compression ratio is very close to native gzip.
 
