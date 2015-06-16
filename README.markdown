@@ -33,7 +33,7 @@ all your legacy data.
 
 When you are working with compressed file it is easier for operation
 system to cache it (it is smaller), so when you use traditional HDD (not
-SDD) csio can be even faster in multiply random access, than stdio.
+SSD) csio can be even faster in multiply random access, than stdio.
 
 I used 3 files. Every file 1585741824 bytes (~1.5GB):
 
