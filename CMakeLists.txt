@@ -85,7 +85,7 @@ if(WITH_dzip)
 		include(ExternalProject)
 		set(LIBUNWIND_ROOT "${CMAKE_CURRENT_BINARY_DIR}/libunwind")
 		ExternalProject_Add(libunwind
-			URL "http://download.savannah.gnu.org/releases/libunwind/libunwind-1.1.tar.gz"
+			URL "/usr/portage/distfiles/libunwind-1.1.tar.gz"
 			URL_MD5 "fb4ea2f6fbbe45bf032cd36e586883ce"
 			CONFIGURE_COMMAND ./configure --disable-minidebuginfo --enable-static --disable-shared --prefix <INSTALL_DIR>
 			INSTALL_DIR "${LIBUNWIND_ROOT}"
