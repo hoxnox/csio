@@ -65,8 +65,9 @@ if(WITH_dzip)
 		include(ExternalProject)
 		set(ZMQ_ROOT "${CMAKE_CURRENT_BINARY_DIR}/zmq")
 		ExternalProject_Add(zmq
-			URL "http://download.zeromq.org/zeromq-4.1.2.tar.gz"
+			URL "${PROJECT_SOURCE_DIR}/third-party/zeromq-4.1.2.tar.gz"
 			URL_MD5 "159c0c56a895472f02668e692d122685"
+			PATCH_COMMAND ./autogen.sh
 			CONFIGURE_COMMAND ./configure --enable-static --disable-shared --without-libsodium --without-libgssapi_krb5 --without-documentation --prefix <INSTALL_DIR>
 			INSTALL_DIR "${ZMQ_ROOT}"
 			BUILD_IN_SOURCE 1
@@ -85,7 +86,7 @@ if(WITH_dzip)
 		include(ExternalProject)
 		set(LIBUNWIND_ROOT "${CMAKE_CURRENT_BINARY_DIR}/libunwind")
 		ExternalProject_Add(libunwind
-			URL "/usr/portage/distfiles/libunwind-1.1.tar.gz"
+			URL "${PROJECT_SOURCE_DIR}/third-party/libunwind-1.1.tar.gz"
 			URL_MD5 "fb4ea2f6fbbe45bf032cd36e586883ce"
 			CONFIGURE_COMMAND ./configure --disable-minidebuginfo --enable-static --disable-shared --prefix <INSTALL_DIR>
 			INSTALL_DIR "${LIBUNWIND_ROOT}"
@@ -96,8 +97,8 @@ if(WITH_dzip)
 
 		set(Glog_ROOT "${CMAKE_CURRENT_BINARY_DIR}/glog")
 		ExternalProject_Add(glog
-			URL "https://github.com/google/glog/archive/v0.3.4.tar.gz"
-			URL_MD5 "df92e05c9d02504fb96674bc776a41cb"
+			URL "${PROJECT_SOURCE_DIR}/third-party/glog-0.3.3.tar.gz"
+			URL_MD5 "a6fd2c22f8996846e34c763422717c18"
 			CONFIGURE_COMMAND ./configure --enable-static --disable-shared --prefix <INSTALL_DIR>
 			INSTALL_DIR "${Glog_ROOT}"
 			BUILD_IN_SOURCE 1
@@ -132,7 +133,9 @@ if(WITH_dzip)
 	)
 	set(DZIP_SRC ./src/dzip.cpp)
 	add_executable(dzip ${DZIP_SRC})
-	add_dependencies(dzip_internal ${EXTERNAL_DEPS})
+	if (EXTERNAL_DEPS)
+		add_dependencies(dzip_internal ${EXTERNAL_DEPS})
+	endif()
 	target_link_libraries(dzip dzip_internal ${LIBRARIES})
 	set_target_properties(dzip PROPERTIES COMPILE_FLAGS "-std=c++0x")
 	set_target_properties(dzip_internal PROPERTIES COMPILE_FLAGS "-std=c++0x")
