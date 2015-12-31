@@ -176,6 +176,8 @@ if(WITH_TESTS)
 		./test/test.cpp
 		./test/tcsio_none.hpp
 		./test/tcsio_dictzip.hpp
+		./src/Messages.hpp
+		./src/Messages.cpp
 	)
 	enable_testing()
 	find_package(GTest REQUIRED)

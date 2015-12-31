@@ -151,6 +151,22 @@ TEST_F(TestCSIO, cfread )
 
 TEST_F(TestCSIO, cfgetc )
 {
+	std::string fname = TEST_SAMPLES_DIR;
+	fname += "/file1.dz";
+	CFILE* cfile = cfopen(fname.c_str(), "rb");
+	ASSERT_FALSE(cfile == NULL);
+	int counter = 0;
+	while(!feof(cfile))
+	{
+		if (counter == 256)
+			break;
+		int c = cfgetc(cfile);
+		ASSERT_NE(EOF, c);
+		ASSERT_EQ(counter, c);
+		++counter;
+	}
+	c = cfgetc(cfile);
+	ASSERT_EQ(EOF, c);
 }
 
 TEST_F(TestCSIO, cfseek )
