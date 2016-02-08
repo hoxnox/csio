@@ -149,6 +149,9 @@ nx_add_library(csio ${CSIO_FORCE_SHARED_CRT} ${WITH_STATIC_LIBS}
 	${WITH_SHARED_LIBS} "CSIO_SHARED"
 	"${csio_VERSION_MAJOR}-${csio_VERSION_MINOR}-${csio_VERSION_PATCH}"
 	"${CSIO_SRC}")
+if (WITH_SHARED_LIBS)
+	target_link_libraries(csio-shared ${ZLIB_LIBRARIES})
+endif()
 list(APPEND LIBRARIES csio)
 
 ########################################################################
@@ -197,7 +200,12 @@ endif()
 # installation
 
 
-INSTALL(TARGETS csio DESTINATION lib)
+if (WITH_STATIC_LIBS)
+	INSTALL(TARGETS csio DESTINATION lib)
+endif()
+if (WITH_SHARED_LIBS)
+	INSTALL(TARGETS csio-shared DESTINATION lib)
+endif()
 if (WITH_dzip)
 	INSTALL(TARGETS dzip DESTINATION bin)
 endif()
