@@ -152,6 +152,12 @@ nx_add_library(csio ${CSIO_FORCE_SHARED_CRT} ${WITH_STATIC_LIBS}
 list(APPEND LIBRARIES csio)
 
 ########################################################################
+# grep
+
+add_executable(csio_grep misc/grep.c)
+target_link_libraries(csio_grep ${LIBRARIES})
+
+########################################################################
 # docs
 
 if(WITH_DOCS)

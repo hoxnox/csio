@@ -654,7 +654,7 @@ cfgetc(CFILE* stream)
 			errno = EFAULT;
 			return EOF;
 		}
-		return stream->buf[stream->currpos++ - stream->bufoff];
+		return (int)((unsigned char)stream->buf[stream->currpos++ - stream->bufoff]);
 	}
 	else
 	{
