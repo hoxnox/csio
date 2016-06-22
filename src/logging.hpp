@@ -5,6 +5,8 @@
 
 namespace csio {
 
+#define ELPP_THREAD_SAFE
+#define ELPP_FORCE_USE_STD_THREAD
 #define INIT_LOGGING INITIALIZE_EASYLOGGINGPP
 
 using namespace el;

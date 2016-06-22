@@ -6,7 +6,7 @@ class SnappyStreamConan(ConanFile):
     requires = ""
     settings = "os", "compiler", "build_type", "arch"
     options = {"shared": [True, False], "dzip": [True, False]}
-    default_options = "shared=False", "dzip=False", "glog:shared=False", "zlib:shared=False", "libzmq:shared=False"
+    default_options = "shared=False", "dzip=False", "zlib:shared=False", "libzmq:shared=False"
     generators = "cmake"
     exports = "*"
 
@@ -14,7 +14,6 @@ class SnappyStreamConan(ConanFile):
         if self.options.dzip:
             self.requires("zlib/1.2.8@lasote/stable")
             self.requires("libzmq/4.1.5@memsharded/stable")
-            self.requires("glog/0.3.4@dwerner/testing")
         else:
             self.requires("zlib/1.2.8@lasote/stable")
 
@@ -36,6 +35,8 @@ class SnappyStreamConan(ConanFile):
             self.copy("dzip", dst="bin", src="distr/bin")
         self.copy("*.h", dst="include", src="distr/include")
         self.copy("*.a", dst="lib", src="distr/lib")
+        self.copy("*.lib", dst="lib", src="distr/lib")
+        self.copy("*.dll", dst="lib", src="distr/lib")
 
     def package_info(self):
         self.cpp_info.libs = ["csio"]
