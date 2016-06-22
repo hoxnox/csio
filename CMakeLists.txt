@@ -13,8 +13,10 @@ option(WITH_SHARED_LIBS "Build shared libraries." OFF)
 option(WITH_STATIC_LIBS "Build static libraries." ON)
 option(WITH_dzip        "Build dzip compress utility" ON)
 option(WITH_SYSTEM_ZMQ  "Use system zeromq" OFF)
+option(WITH_CONAN "Use conan as a dependency manager" OFF)
 option(CSIO_FORCE_SHARED_CRT
 	"Use shared run-time lib even when csio is built as static lib." OFF)
+option(WITH_GREP "Build naive grep utility" OFF)
 
 ########################################################################
 # general
@@ -46,42 +48,57 @@ include_directories("${PROJECT_SOURCE_DIR}/src"
 ########################################################################
 # zlib
 
-find_package(ZLIB REQUIRED)
-include_directories(${ZLIB_INCLUDE_DIRS})
-list(APPEND LIBRARIES ${ZLIB_LIBRARIES})
+if (NOT WITH_CONAN)
+	find_package(ZLIB REQUIRED)
+	include_directories(${ZLIB_INCLUDE_DIRS})
+	list(APPEND LIBRARIES ${ZLIB_LIBRARIES})
+endif()
+
+########################################################################
+# conan
+
+if (WITH_CONAN)
+	include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
+	conan_basic_setup()
+	list(APPEND LIBRARIES ${CONAN_LIBS})
+endif()
 
 ########################################################################
 # dzip
 
 if(WITH_dzip)
 
-	####################################################################
-	# zmq
-	if (WITH_SYSTEM_ZMQ)
-		set(ZMQ_USE_STATIC_LIBS true)
-		find_package(ZMQ REQUIRED)
-	else()
-		include(ExternalProject)
-		set(ZMQ_ROOT "${CMAKE_CURRENT_BINARY_DIR}/zmq")
-		ExternalProject_Add(zmq
-			URL "${PROJECT_SOURCE_DIR}/third-party/zeromq-4.1.2.tar.gz"
-			URL_MD5 "159c0c56a895472f02668e692d122685"
-			PATCH_COMMAND ./autogen.sh
-			CONFIGURE_COMMAND ./configure --enable-static --disable-shared --without-libsodium --without-libgssapi_krb5 --without-documentation --prefix <INSTALL_DIR>
-			INSTALL_DIR "${ZMQ_ROOT}"
-			BUILD_IN_SOURCE 1
-		)
-		set(ZMQ_INCLUDE_DIR ${ZMQ_ROOT}/include)
-		set(ZMQ_LIBRARIES ${ZMQ_ROOT}/lib/libzmq.a)
-		list(APPEND EXTERNAL_DEPS zmq)
+	if (NOT WITH_CONAN)
+		####################################################################
+		# zmq
+		if (WITH_SYSTEM_ZMQ)
+			set(ZMQ_USE_STATIC_LIBS true)
+			find_package(ZMQ REQUIRED)
+		else()
+			include(ExternalProject)
+			set(ZMQ_ROOT "${CMAKE_CURRENT_BINARY_DIR}/zmq")
+			ExternalProject_Add(zmq
+				URL "${PROJECT_SOURCE_DIR}/third-party/zeromq-4.1.2.tar.gz"
+				URL_MD5 "159c0c56a895472f02668e692d122685"
+				PATCH_COMMAND ./autogen.sh
+				CONFIGURE_COMMAND ./configure --enable-static --disable-shared --without-libsodium --without-libgssapi_krb5 --without-documentation --prefix <INSTALL_DIR>
+				INSTALL_DIR "${ZMQ_ROOT}"
+				BUILD_IN_SOURCE 1
+			)
+			set(ZMQ_INCLUDE_DIR ${ZMQ_ROOT}/include)
+			set(ZMQ_LIBRARIES ${ZMQ_ROOT}/lib/libzmq.a)
+			list(APPEND EXTERNAL_DEPS zmq)
+		endif()
+
+		include_directories(${ZMQ_INCLUDE_DIR})
+		list(APPEND LIBRARIES ${ZMQ_LIBRARIES})
 	endif()
-	include_directories(${ZMQ_INCLUDE_DIR})
 
 	find_package(Threads REQUIRED)
 	if (NOT CMAKE_USE_PTHREADS_INIT)
 		message(FATAL_ERROR "dzip utility needs pthreads")
 	endif()
-	list(APPEND LIBRARIES ${ZMQ_LIBRARIES} pthread rt)
+	list(APPEND LIBRARIES pthread rt)
 
 	add_library(dzip_internal STATIC 
 		./src/ProcessManagerBase.hpp
@@ -99,7 +116,7 @@ if(WITH_dzip)
 	)
 	set(DZIP_SRC ./src/dzip.cpp)
 	add_executable(dzip ${DZIP_SRC})
-	if (EXTERNAL_DEPS)
+	if (EXTERNAL_DEPS AND NOT WITH_CONAN)
 		add_dependencies(dzip_internal ${EXTERNAL_DEPS})
 	endif()
 	target_link_libraries(dzip dzip_internal ${LIBRARIES})
@@ -120,8 +137,10 @@ list(APPEND LIBRARIES csio)
 ########################################################################
 # grep
 
-add_executable(csio_grep misc/grep.c)
-target_link_libraries(csio_grep ${LIBRARIES})
+if (WITH_GREP)
+	add_executable(csio_grep misc/grep.c)
+	target_link_libraries(csio_grep ${LIBRARIES})
+endif()
 
 ########################################################################
 # docs
