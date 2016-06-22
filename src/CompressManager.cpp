@@ -1,7 +1,6 @@
 /**@author Merder Kim <hoxnox@gmail.com>
  * @date 20140404 19:40:10 */
 
-#include <glog/logging.h>
 #include <thread>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -13,6 +12,7 @@
 #include "CompressManager.hpp"
 #include "Utils.hpp"
 #include "Messages.hpp"
+#include "logging.hpp"
 
 namespace csio {
 
@@ -31,7 +31,7 @@ CompressManager::CompressManager(const Config& cfg)
 	, msg_pushed_(0)
 	, compressors_count_(0)
 {
-	LOG_IF(ERROR, !zmq_ctx_)
+	LOG_IF(!zmq_ctx_, ERROR)
 		<< _("CompressManager: error creating communication context.")
 		<< _(" Message: ") << zmq_strerror(errno);
 };
@@ -274,9 +274,9 @@ CompressManager::processWriterIncoming()
 {
 	Message msg;
 	msg.Fetch(sock_writer_);
-	LOG_IF(ERROR, msg == MSG_ERROR)
+	LOG_IF(msg == MSG_ERROR, ERROR)
 		<< _("CompressManager: received MSG_ERROR from the writer.");
-	LOG_IF(ERROR, msg.Type() == Message::TYPE_UNKNOWN)
+	LOG_IF(msg.Type() == Message::TYPE_UNKNOWN, ERROR)
 		<< _("CompressManager: error fetching message from the writer")
 		<< _(" Message: ") << zmq_strerror(errno);
 	return POLL_BREAK;
@@ -348,9 +348,9 @@ CompressManager::createSocks()
 	                                "inproc://writer",
 	                                ZMQ_PAIR,
 	                                MSG_QUEUE_HWM);
-	VLOG_IF(2, sock_outbox_ == NULL) << _("Error with jobs socket.");
-	VLOG_IF(2, sock_inbox_  == NULL) << _("Error with feedback socket.");
-	VLOG_IF(2, sock_writer_ == NULL) << _("Error with writer socket.");
+	VLOG_IF(sock_outbox_ == NULL, 2) << _("Error with jobs socket.");
+	VLOG_IF(sock_inbox_  == NULL, 2) << _("Error with feedback socket.");
+	VLOG_IF(sock_writer_ == NULL, 2) << _("Error with writer socket.");
 	if (!sock_outbox_ || !sock_inbox_ || !sock_writer_)
 		return false;
 	return true;
@@ -436,7 +436,7 @@ CompressManager::waitChildrenReady(const size_t timeout_ms)
 	while(deadline > std::chrono::system_clock::now())
 	{
 		int rs = zmq_poll(poll_items, 2, TICK);
-		VLOG_IF(2, rs == -1)
+		VLOG_IF(rs == -1, 2)
 			<< _("CompressManager: error threads initialization.")
 			<< _(" Message: ") << zmq_strerror(errno);
 
