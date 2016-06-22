@@ -95,10 +95,7 @@ if(WITH_dzip)
 	endif()
 
 	find_package(Threads REQUIRED)
-	if (NOT CMAKE_USE_PTHREADS_INIT)
-		message(FATAL_ERROR "dzip utility needs pthreads")
-	endif()
-	list(APPEND LIBRARIES pthread rt)
+	list(APPEND LIBRARIES ${CMAKE_THREAD_LIBS_INIT})
 
 	add_library(dzip_internal STATIC 
 		./src/ProcessManagerBase.hpp
