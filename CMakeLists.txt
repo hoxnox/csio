@@ -14,8 +14,10 @@ option(WITH_STATIC_LIBS "Build static libraries." ON)
 option(WITH_dzip        "Build dzip compress utility" ON)
 option(WITH_SYSTEM_GLOG "Use system google-log" OFF)
 option(WITH_SYSTEM_ZMQ  "Use system zeromq" OFF)
+option(WITH_CONAN "Use conan as a dependency manager" OFF)
 option(CSIO_FORCE_SHARED_CRT
 	"Use shared run-time lib even when csio is built as static lib." OFF)
+option(WITH_GREP "Build naive grep utility" OFF)
 
 ########################################################################
 # general
@@ -47,72 +49,85 @@ include_directories("${PROJECT_SOURCE_DIR}/src"
 ########################################################################
 # zlib
 
-find_package(ZLIB REQUIRED)
-include_directories(${ZLIB_INCLUDE_DIRS})
-list(APPEND LIBRARIES ${ZLIB_LIBRARIES})
+if (NOT WITH_CONAN)
+	find_package(ZLIB REQUIRED)
+	include_directories(${ZLIB_INCLUDE_DIRS})
+	list(APPEND LIBRARIES ${ZLIB_LIBRARIES})
+endif()
+
+########################################################################
+# conan
+
+if (WITH_CONAN)
+	include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
+	conan_basic_setup()
+	list(APPEND LIBRARIES ${CONAN_LIBS})
+endif()
 
 ########################################################################
 # dzip
 
 if(WITH_dzip)
 
-	####################################################################
-	# zmq
-	if (WITH_SYSTEM_ZMQ)
-		set(ZMQ_USE_STATIC_LIBS true)
-		find_package(ZMQ REQUIRED)
-	else()
-		include(ExternalProject)
-		set(ZMQ_ROOT "${CMAKE_CURRENT_BINARY_DIR}/zmq")
-		ExternalProject_Add(zmq
-			URL "${PROJECT_SOURCE_DIR}/third-party/zeromq-4.1.2.tar.gz"
-			URL_MD5 "159c0c56a895472f02668e692d122685"
-			PATCH_COMMAND ./autogen.sh
-			CONFIGURE_COMMAND ./configure --enable-static --disable-shared --without-libsodium --without-libgssapi_krb5 --without-documentation --prefix <INSTALL_DIR>
-			INSTALL_DIR "${ZMQ_ROOT}"
-			BUILD_IN_SOURCE 1
-		)
-		set(ZMQ_INCLUDE_DIR ${ZMQ_ROOT}/include)
-		set(ZMQ_LIBRARIES ${ZMQ_ROOT}/lib/libzmq.a)
-		list(APPEND EXTERNAL_DEPS zmq)
+	if (NOT WITH_CONAN)
+		####################################################################
+		# zmq
+		if (WITH_SYSTEM_ZMQ)
+			set(ZMQ_USE_STATIC_LIBS true)
+			find_package(ZMQ REQUIRED)
+		else()
+			include(ExternalProject)
+			set(ZMQ_ROOT "${CMAKE_CURRENT_BINARY_DIR}/zmq")
+			ExternalProject_Add(zmq
+				URL "${PROJECT_SOURCE_DIR}/third-party/zeromq-4.1.2.tar.gz"
+				URL_MD5 "159c0c56a895472f02668e692d122685"
+				PATCH_COMMAND ./autogen.sh
+				CONFIGURE_COMMAND ./configure --enable-static --disable-shared --without-libsodium --without-libgssapi_krb5 --without-documentation --prefix <INSTALL_DIR>
+				INSTALL_DIR "${ZMQ_ROOT}"
+				BUILD_IN_SOURCE 1
+			)
+			set(ZMQ_INCLUDE_DIR ${ZMQ_ROOT}/include)
+			set(ZMQ_LIBRARIES ${ZMQ_ROOT}/lib/libzmq.a)
+			list(APPEND EXTERNAL_DEPS zmq)
+		endif()
+
+		####################################################################
+		# glog
+		if (WITH_SYSTEM_GLOG)
+			set(Glog_USE_STATIC_LIBS true)
+			find_package(Glog REQUIRED)
+		else()
+			include(ExternalProject)
+			set(LIBUNWIND_ROOT "${CMAKE_CURRENT_BINARY_DIR}/libunwind")
+			ExternalProject_Add(libunwind
+				URL "${PROJECT_SOURCE_DIR}/third-party/libunwind-1.1.tar.gz"
+				URL_MD5 "fb4ea2f6fbbe45bf032cd36e586883ce"
+				CONFIGURE_COMMAND ./configure --disable-minidebuginfo --enable-static --disable-shared --prefix <INSTALL_DIR>
+				INSTALL_DIR "${LIBUNWIND_ROOT}"
+				BUILD_IN_SOURCE 1
+			)
+			set(LIBUNWIND_INCLUDE_DIR ${LIBUNWIND_ROOT}/include)
+			set(LIBUNWIND_LIBRARIES ${LIBUNWIND_ROOT}/lib/libunwind.a)
+
+			set(Glog_ROOT "${CMAKE_CURRENT_BINARY_DIR}/glog")
+			ExternalProject_Add(glog
+				URL "${PROJECT_SOURCE_DIR}/third-party/glog-0.3.3.tar.gz"
+				URL_MD5 "a6fd2c22f8996846e34c763422717c18"
+				CONFIGURE_COMMAND ./configure --enable-static --disable-shared --prefix <INSTALL_DIR>
+				INSTALL_DIR "${Glog_ROOT}"
+				BUILD_IN_SOURCE 1
+			)
+			set(Glog_INCLUDE_DIR ${Glog_ROOT}/include)
+			set(Glog_LIBRARIES ${Glog_ROOT}/lib/libglog.a ${LIBUNWIND_LIBRARIES})
+			add_dependencies(glog libunwind)
+			message(STATUS "Found external dependency GLOG: " ${Glog_INCLUDE_DIR})
+			list(APPEND EXTERNAL_DEPS glog)
+		endif()
+		include_directories(${ZMQ_INCLUDE_DIR})
+		include_directories(${Glog_INCLUDE_DIR})
+		list(APPEND LIBRARIES ${Glog_LIBRARIES} ${ZMQ_LIBRARIES} pthread rt)
 	endif()
 
-	####################################################################
-	# glog
-	if (WITH_SYSTEM_GLOG)
-		set(Glog_USE_STATIC_LIBS true)
-		find_package(Glog REQUIRED)
-	else()
-		include(ExternalProject)
-		set(LIBUNWIND_ROOT "${CMAKE_CURRENT_BINARY_DIR}/libunwind")
-		ExternalProject_Add(libunwind
-			URL "${PROJECT_SOURCE_DIR}/third-party/libunwind-1.1.tar.gz"
-			URL_MD5 "fb4ea2f6fbbe45bf032cd36e586883ce"
-			CONFIGURE_COMMAND ./configure --disable-minidebuginfo --enable-static --disable-shared --prefix <INSTALL_DIR>
-			INSTALL_DIR "${LIBUNWIND_ROOT}"
-			BUILD_IN_SOURCE 1
-		)
-		set(LIBUNWIND_INCLUDE_DIR ${LIBUNWIND_ROOT}/include)
-		set(LIBUNWIND_LIBRARIES ${LIBUNWIND_ROOT}/lib/libunwind.a)
-
-		set(Glog_ROOT "${CMAKE_CURRENT_BINARY_DIR}/glog")
-		ExternalProject_Add(glog
-			URL "${PROJECT_SOURCE_DIR}/third-party/glog-0.3.3.tar.gz"
-			URL_MD5 "a6fd2c22f8996846e34c763422717c18"
-			CONFIGURE_COMMAND ./configure --enable-static --disable-shared --prefix <INSTALL_DIR>
-			INSTALL_DIR "${Glog_ROOT}"
-			BUILD_IN_SOURCE 1
-		)
-		set(Glog_INCLUDE_DIR ${Glog_ROOT}/include)
-		set(Glog_LIBRARIES ${Glog_ROOT}/lib/libglog.a ${LIBUNWIND_LIBRARIES})
-		add_dependencies(glog libunwind)
-		message(STATUS "Found external dependency GLOG: " ${Glog_INCLUDE_DIR})
-		list(APPEND EXTERNAL_DEPS glog)
-	endif()
-
-	include_directories(${ZMQ_INCLUDE_DIR})
-	include_directories(${Glog_INCLUDE_DIR})
-	list(APPEND LIBRARIES ${Glog_LIBRARIES} ${ZMQ_LIBRARIES} pthread rt)
 	find_package(Threads REQUIRED)
 	if (NOT CMAKE_USE_PTHREADS_INIT)
 		message(FATAL_ERROR "dzip utility needs pthreads")
@@ -133,7 +148,7 @@ if(WITH_dzip)
 	)
 	set(DZIP_SRC ./src/dzip.cpp)
 	add_executable(dzip ${DZIP_SRC})
-	if (EXTERNAL_DEPS)
+	if (EXTERNAL_DEPS AND NOT WITH_CONAN)
 		add_dependencies(dzip_internal ${EXTERNAL_DEPS})
 	endif()
 	target_link_libraries(dzip dzip_internal ${LIBRARIES})
@@ -154,8 +169,10 @@ list(APPEND LIBRARIES csio)
 ########################################################################
 # grep
 
-add_executable(csio_grep misc/grep.c)
-target_link_libraries(csio_grep ${LIBRARIES})
+if (WITH_GREP)
+	add_executable(csio_grep misc/grep.c)
+	target_link_libraries(csio_grep ${LIBRARIES})
+endif()
 
 ########################################################################
 # docs
