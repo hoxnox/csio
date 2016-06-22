@@ -12,7 +12,6 @@ option(WITH_DOCS  "Generate docs." OFF)
 option(WITH_SHARED_LIBS "Build shared libraries." OFF)
 option(WITH_STATIC_LIBS "Build static libraries." ON)
 option(WITH_dzip        "Build dzip compress utility" ON)
-option(WITH_SYSTEM_GLOG "Use system google-log" OFF)
 option(WITH_SYSTEM_ZMQ  "Use system zeromq" OFF)
 option(CSIO_FORCE_SHARED_CRT
 	"Use shared run-time lib even when csio is built as static lib." OFF)
@@ -76,47 +75,14 @@ if(WITH_dzip)
 		set(ZMQ_LIBRARIES ${ZMQ_ROOT}/lib/libzmq.a)
 		list(APPEND EXTERNAL_DEPS zmq)
 	endif()
-
-	####################################################################
-	# glog
-	if (WITH_SYSTEM_GLOG)
-		set(Glog_USE_STATIC_LIBS true)
-		find_package(Glog REQUIRED)
-	else()
-		include(ExternalProject)
-		set(LIBUNWIND_ROOT "${CMAKE_CURRENT_BINARY_DIR}/libunwind")
-		ExternalProject_Add(libunwind
-			URL "${PROJECT_SOURCE_DIR}/third-party/libunwind-1.1.tar.gz"
-			URL_MD5 "fb4ea2f6fbbe45bf032cd36e586883ce"
-			CONFIGURE_COMMAND ./configure --disable-minidebuginfo --enable-static --disable-shared --prefix <INSTALL_DIR>
-			INSTALL_DIR "${LIBUNWIND_ROOT}"
-			BUILD_IN_SOURCE 1
-		)
-		set(LIBUNWIND_INCLUDE_DIR ${LIBUNWIND_ROOT}/include)
-		set(LIBUNWIND_LIBRARIES ${LIBUNWIND_ROOT}/lib/libunwind.a)
-
-		set(Glog_ROOT "${CMAKE_CURRENT_BINARY_DIR}/glog")
-		ExternalProject_Add(glog
-			URL "${PROJECT_SOURCE_DIR}/third-party/glog-0.3.3.tar.gz"
-			URL_MD5 "a6fd2c22f8996846e34c763422717c18"
-			CONFIGURE_COMMAND ./configure --enable-static --disable-shared --prefix <INSTALL_DIR>
-			INSTALL_DIR "${Glog_ROOT}"
-			BUILD_IN_SOURCE 1
-		)
-		set(Glog_INCLUDE_DIR ${Glog_ROOT}/include)
-		set(Glog_LIBRARIES ${Glog_ROOT}/lib/libglog.a ${LIBUNWIND_LIBRARIES})
-		add_dependencies(glog libunwind)
-		message(STATUS "Found external dependency GLOG: " ${Glog_INCLUDE_DIR})
-		list(APPEND EXTERNAL_DEPS glog)
-	endif()
-
 	include_directories(${ZMQ_INCLUDE_DIR})
-	include_directories(${Glog_INCLUDE_DIR})
-	list(APPEND LIBRARIES ${Glog_LIBRARIES} ${ZMQ_LIBRARIES} pthread rt)
+
 	find_package(Threads REQUIRED)
 	if (NOT CMAKE_USE_PTHREADS_INIT)
 		message(FATAL_ERROR "dzip utility needs pthreads")
 	endif()
+	list(APPEND LIBRARIES ${ZMQ_LIBRARIES} pthread rt)
+
 	add_library(dzip_internal STATIC 
 		./src/ProcessManagerBase.hpp
 		./src/ProcessManagerBase.cpp

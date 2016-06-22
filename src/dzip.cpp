@@ -9,6 +9,8 @@
 
 using namespace csio;
 
+INIT_LOGGING
+
 int
 main(int argc, char * argv[])
 {
