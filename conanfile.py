@@ -16,6 +16,7 @@ class SnappyStreamConan(ConanFile):
                "CMakeLists.txt",
                "README.markdown",
                "LICENSE")
+    url = "https://github.com/hoxnox/csio.git"
 
     def requirements(self):
         if self.options.dzip:
