@@ -2,13 +2,20 @@ from conans import ConanFile, CMake
 
 class SnappyStreamConan(ConanFile):
     name = "csio"
-    version = "0.1.2"
+    version = "0.1.3"
     requires = ""
     settings = "os", "compiler", "build_type", "arch"
     options = {"shared": [True, False], "dzip": [True, False]}
     default_options = "shared=False", "dzip=False", "zlib:shared=False", "libzmq:shared=False"
     generators = "cmake"
-    exports = "*"
+    exports = ("include/*.h", 
+               "src/*.h", "src/*.c",
+               "src/*.hpp", "src/*.cpp",
+               "src/csio_config.cfg",
+               "cmake/ext/nx_utils.cmake",
+               "CMakeLists.txt",
+               "README.markdown",
+               "LICENSE")
 
     def requirements(self):
         if self.options.dzip:

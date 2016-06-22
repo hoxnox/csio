@@ -6,7 +6,7 @@ username = os.getenv("CONAN_USERNAME", "hoxnox")
 
 class SnappyStreamTestConan(ConanFile):
     settings = "os", "compiler", "build_type", "arch"
-    requires = "csio/0.1.2@%s/%s" % (username, channel)
+    requires = "csio/0.1.3@%s/%s" % (username, channel)
     default_options = "csio:dzip=True"
     generators = "cmake"
 

@@ -29,7 +29,7 @@ nx_configure()
 
 set(csio_VERSION_MAJOR 0)
 set(csio_VERSION_MINOR 1)
-set(csio_VERSION_PATCH 2)
+set(csio_VERSION_PATCH 3)
 # configuration header
 set(TEST_SAMPLES_DIR "${PROJECT_SOURCE_DIR}/test/samples/")
 set(TEST_TMP_DIR "/tmp")
