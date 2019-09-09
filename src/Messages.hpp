@@ -157,6 +157,7 @@ Message::operator=(const Message& copy)
 	datasz_ = copy.datasz_;
 	data_.reset(new uint8_t[datasz_]);
 	memcpy(data_.get(), copy.data_.get(), datasz_);
+    return *this;
 }
 
 } // namespace

@@ -165,6 +165,7 @@ Compressor::Start(Compressor* self, int level)
 		<< _("compressor cleaning error.") << _(" Code:") << rs;
 	zmq_close(sock_in_);
 	zmq_close(sock_out_);
+    return nullptr;
 }
 
 } // namespace
