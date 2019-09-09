@@ -6,7 +6,7 @@ class SnappyStreamConan(ConanFile):
     requires = ""
     settings = "os", "compiler", "build_type", "arch"
     options = {"shared": [True, False], "dzip": [True, False]}
-    default_options = "shared=False", "dzip=False", "zlib:shared=False", "libzmq:shared=False"
+    default_options = "shared=False", "dzip=False", "zlib:shared=False", "zmq:shared=False", "zmq:encryption=None"
     generators = "cmake"
     exports = ("include/*.h", 
                "src/*.h", "src/*.c",
@@ -20,10 +20,10 @@ class SnappyStreamConan(ConanFile):
 
     def requirements(self):
         if self.options.dzip:
-            self.requires("zlib/1.2.8@lasote/stable")
-            self.requires("libzmq/4.1.5@memsharded/stable")
+            self.requires("zlib/1.2.11@conan/stable")
+            self.requires("zmq/4.3.1@bincrafters/stable")
         else:
-            self.requires("zlib/1.2.8@lasote/stable")
+            self.requires("zlib/1.2.11@conan/stable")
 
     def build(self):
         cmake = CMake(self.settings)
